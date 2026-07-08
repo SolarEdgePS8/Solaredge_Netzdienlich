@@ -1,0 +1,93 @@
+=== EXISTING TESTER BRIDGE ===
+Zeit: 2026-07-08T20:37:23.671839
+
+=== TESTER/HEALTH PACKAGES ===
+/config/packages/system_health_tester.yaml | 737 lines
+
+=== EXISTING TESTER STATE SENSORS ===
+sensor.se_nf_config_check: ok
+sensor.se_nf_sanity_check: ok
+sensor.se_nf_lifetime_latch_repair_status: ok · done · Latch off · SoE 87.2 / Ziel 80.0
+sensor.se_nf_writer_last_decision: Kein Write nötig · Soll 0 W · Ist 0 W
+sensor.se_nf_decision_reason: Erledigt · Tagesfenster beendet
+
+=== SHARE TEST REPORT CANDIDATES ===
+/share/HomeAssist/system_health_tester/system_health_2026-07-08_20-30-01.json | 15684 bytes | 2026-07-08T20:30:01.787576
+  hit: {"meta":{"schema":"system-health-v18-max-analysis","tester":"SYSTEM-HEALTH TESTER v18.0 MAX ANALYSIS","timestamp":"2026-07-08T20:30:01.614131+02:00","unix_timestamp":1783535401,"interval_minutes":30,"read_only":true,"ent
+/share/HomeAssist/system_health_tester/system_health_2026-07-08_20-00-01.json | 15704 bytes | 2026-07-08T20:00:01.747635
+  hit: {"meta":{"schema":"system-health-v18-max-analysis","tester":"SYSTEM-HEALTH TESTER v18.0 MAX ANALYSIS","timestamp":"2026-07-08T20:00:01.577784+02:00","unix_timestamp":1783533601,"interval_minutes":30,"read_only":true,"ent
+/share/HomeAssist/system_health_tester/system_health_2026-07-08_19-30-02.json | 15607 bytes | 2026-07-08T19:30:02.169138
+  hit: {"meta":{"schema":"system-health-v18-max-analysis","tester":"SYSTEM-HEALTH TESTER v18.0 MAX ANALYSIS","timestamp":"2026-07-08T19:30:02.007975+02:00","unix_timestamp":1783531801,"interval_minutes":30,"read_only":true,"ent
+/share/HomeAssist/system_health_tester/system_health_2026-07-08_19-00-01.json | 15875 bytes | 2026-07-08T19:00:02.068779
+  hit: {"meta":{"schema":"system-health-v18-max-analysis","tester":"SYSTEM-HEALTH TESTER v18.0 MAX ANALYSIS","timestamp":"2026-07-08T19:00:01.909447+02:00","unix_timestamp":1783530001,"interval_minutes":30,"read_only":true,"ent
+/share/HomeAssist/system_health_tester/system_health_2026-07-08_18-30-02.json | 15796 bytes | 2026-07-08T18:30:02.209397
+  hit: {"meta":{"schema":"system-health-v18-max-analysis","tester":"SYSTEM-HEALTH TESTER v18.0 MAX ANALYSIS","timestamp":"2026-07-08T18:30:02.046798+02:00","unix_timestamp":1783528202,"interval_minutes":30,"read_only":true,"ent
+/share/HomeAssist/system_health_tester/system_health_2026-07-08_18-00-01.json | 15702 bytes | 2026-07-08T18:00:02.061660
+  hit: {"meta":{"schema":"system-health-v18-max-analysis","tester":"SYSTEM-HEALTH TESTER v18.0 MAX ANALYSIS","timestamp":"2026-07-08T18:00:01.864639+02:00","unix_timestamp":1783526401,"interval_minutes":30,"read_only":true,"ent
+/share/HomeAssist/system_health_tester/system_health_2026-07-08_17-30-01.json | 15416 bytes | 2026-07-08T17:30:01.911986
+  hit: {"meta":{"schema":"system-health-v18-max-analysis","tester":"SYSTEM-HEALTH TESTER v18.0 MAX ANALYSIS","timestamp":"2026-07-08T17:30:01.749145+02:00","unix_timestamp":1783524601,"interval_minutes":30,"read_only":true,"ent
+/share/HomeAssist/system_health_tester/system_health_2026-07-08_17-00-01.json | 15584 bytes | 2026-07-08T17:00:02.104448
+  hit: {"meta":{"schema":"system-health-v18-max-analysis","tester":"SYSTEM-HEALTH TESTER v18.0 MAX ANALYSIS","timestamp":"2026-07-08T17:00:01.922101+02:00","unix_timestamp":1783522801,"interval_minutes":30,"read_only":true,"ent
+/share/HomeAssist/system_health_tester/system_health_2026-07-08_16-30-01.json | 15576 bytes | 2026-07-08T16:30:01.938821
+  hit: {"meta":{"schema":"system-health-v18-max-analysis","tester":"SYSTEM-HEALTH TESTER v18.0 MAX ANALYSIS","timestamp":"2026-07-08T16:30:01.763559+02:00","unix_timestamp":1783521001,"interval_minutes":30,"read_only":true,"ent
+/share/HomeAssist/system_health_tester/system_health_2026-07-08_16-00-01.json | 15490 bytes | 2026-07-08T16:00:01.953544
+  hit: {"meta":{"schema":"system-health-v18-max-analysis","tester":"SYSTEM-HEALTH TESTER v18.0 MAX ANALYSIS","timestamp":"2026-07-08T16:00:01.748887+02:00","unix_timestamp":1783519201,"interval_minutes":30,"read_only":true,"ent
+/share/HomeAssist/system_health_tester/system_health_2026-07-08_15-30-01.json | 15488 bytes | 2026-07-08T15:30:01.918969
+  hit: {"meta":{"schema":"system-health-v18-max-analysis","tester":"SYSTEM-HEALTH TESTER v18.0 MAX ANALYSIS","timestamp":"2026-07-08T15:30:01.746723+02:00","unix_timestamp":1783517401,"interval_minutes":30,"read_only":true,"ent
+/share/HomeAssist/system_health_tester/system_health_2026-07-08_15-00-01.json | 15423 bytes | 2026-07-08T15:00:01.904943
+  hit: {"meta":{"schema":"system-health-v18-max-analysis","tester":"SYSTEM-HEALTH TESTER v18.0 MAX ANALYSIS","timestamp":"2026-07-08T15:00:01.736134+02:00","unix_timestamp":1783515601,"interval_minutes":30,"read_only":true,"ent
+/share/HomeAssist/system_health_tester/system_health_2026-07-08_14-30-01.json | 15424 bytes | 2026-07-08T14:30:01.872668
+  hit: {"meta":{"schema":"system-health-v18-max-analysis","tester":"SYSTEM-HEALTH TESTER v18.0 MAX ANALYSIS","timestamp":"2026-07-08T14:30:01.691091+02:00","unix_timestamp":1783513801,"interval_minutes":30,"read_only":true,"ent
+/share/HomeAssist/system_health_tester/system_health_2026-07-08_14-00-01.json | 15423 bytes | 2026-07-08T14:00:02.078119
+  hit: {"meta":{"schema":"system-health-v18-max-analysis","tester":"SYSTEM-HEALTH TESTER v18.0 MAX ANALYSIS","timestamp":"2026-07-08T14:00:01.919535+02:00","unix_timestamp":1783512001,"interval_minutes":30,"read_only":true,"ent
+/share/HomeAssist/system_health_tester/system_health_2026-07-08_13-30-01.json | 15414 bytes | 2026-07-08T13:30:01.827563
+  hit: {"meta":{"schema":"system-health-v18-max-analysis","tester":"SYSTEM-HEALTH TESTER v18.0 MAX ANALYSIS","timestamp":"2026-07-08T13:30:01.665988+02:00","unix_timestamp":1783510201,"interval_minutes":30,"read_only":true,"ent
+/share/HomeAssist/system_health_tester/system_health_2026-07-08_13-00-01.json | 15511 bytes | 2026-07-08T13:00:01.931918
+  hit: {"meta":{"schema":"system-health-v18-max-analysis","tester":"SYSTEM-HEALTH TESTER v18.0 MAX ANALYSIS","timestamp":"2026-07-08T13:00:01.768299+02:00","unix_timestamp":1783508401,"interval_minutes":30,"read_only":true,"ent
+/share/HomeAssist/system_health_tester/system_health_2026-07-08_12-30-01.json | 15515 bytes | 2026-07-08T12:30:01.801900
+  hit: {"meta":{"schema":"system-health-v18-max-analysis","tester":"SYSTEM-HEALTH TESTER v18.0 MAX ANALYSIS","timestamp":"2026-07-08T12:30:01.630846+02:00","unix_timestamp":1783506601,"interval_minutes":30,"read_only":true,"ent
+/share/se_nf_bad_dependency_audit_final_20260708_122558.txt | 245 bytes | 2026-07-08T12:25:58.802174
+  hit: critical_main: 0
+  hit: - sensor.se_nf_available_pv_for_battery = unavailable
+/share/se_nf_bad_dependency_audit_20260708_121835.txt | 4385 bytes | 2026-07-08T12:18:37.255770
+  hit: sensor.se_nf_forecast_pv_now | state=unavailable | unit=W | SE NF Forecast PV Now
+  hit: sensor.se_nf_good_day_for_late_start | state=unavailable | unit= | SE NF Good Day For Late Start
+  hit: sensor.se_nf_available_pv_for_battery | state=unavailable | unit=kWh | SE NF Available PV for Battery
+  hit: sensor.se_nf_effective_available_pv_for_battery | state=unavailable | unit=kWh | SE NF Effective Available PV For Battery
+  hit: sensor.se_nf_effective_pv_delta | state=unavailable | unit=kWh | SE NF Effective PV Delta
+  hit: critical_main: 2
+/share/se_nf_bad_dependency_audit_20260708_121021.txt | 56727 bytes | 2026-07-08T12:10:23.418895
+  hit: sensor.se_nf_forecast_pv_now | state=unavailable | unit=W | SE NF Forecast PV Now
+  hit: sensor.se_nf_good_day_for_late_start | state=unavailable | unit= | SE NF Good Day For Late Start
+  hit: input_number.se_nf_early_open_deficit_kwh | state=unavailable | unit=kWh | Netzdienlich: Frühe Freigabe Defizit (kWh)
+  hit: sensor.se_nf_available_pv_for_battery | state=unavailable | unit=kWh | SE NF Available PV for Battery
+  hit: sensor.se_nf_effective_available_pv_for_battery | state=unavailable | unit=kWh | SE NF Effective Available PV For Battery
+  hit: sensor.se_nf_effective_pv_delta | state=unavailable | unit=kWh | SE NF Effective PV Delta
+  hit: sensor.evcc_battery_mode | state=unknown | unit= | [evcc] Batterie Modus [CODE]
+  hit: sensor.se_nf_charge_plan | state=unavailable | unit= | SE NF Charge Plan
+/share/se_nf_readonly_audit_20260708_120806.txt | 47842 bytes | 2026-07-08T12:08:07.061373
+  hit: number.solaredge_i1_ac_charge_limit                          | unavailable        |        |            | Solaredge I1 AC Charge Limit  <<< BAD
+  hit: number.solaredge_i1_external_production_max                  | unavailable        | W      |            | Solaredge I1 External Production Max  <<< BAD
+  hit: sensor.se_nf_actual_pv_now                                   | unavailable        | W      | power      | SE NF Actual PV Now  <<< BAD
+  hit: sensor.se_nf_actual_pv_today                                 | unavailable        | kWh    | energy     | SE NF Actual PV Today  <<< BAD
+  hit: sensor.se_nf_available_pv_for_battery                        | unavailable        | kWh    | energy     | SE NF Available PV for Battery  <<< BAD
+  hit: sensor.se_nf_dwd_forecast_factor_4h                          | unavailable        |        |            | SE NF DWD Forecast Factor 4h  <<< BAD
+  hit: sensor.se_nf_dwd_tomorrow_forecast_factor                    | unavailable        |        |            | SE NF DWD Tomorrow Forecast Factor  <<< BAD
+  hit: sensor.se_nf_effective_available_pv_for_battery              | unavailable        | kWh    | energy     | SE NF Effective Available PV For Battery  <<< BAD
+/share/HomeAssist/system_health_tester/system_health_2026-07-08_12-00-01.json | 15602 bytes | 2026-07-08T12:00:02.065038
+  hit: {"meta":{"schema":"system-health-v18-max-analysis","tester":"SYSTEM-HEALTH TESTER v18.0 MAX ANALYSIS","timestamp":"2026-07-08T12:00:01.911995+02:00","unix_timestamp":1783504801,"interval_minutes":30,"read_only":true,"ent
+/share/HomeAssist/system_health_tester/system_health_2026-07-08_11-30-01.json | 15489 bytes | 2026-07-08T11:30:02.079978
+  hit: {"meta":{"schema":"system-health-v18-max-analysis","tester":"SYSTEM-HEALTH TESTER v18.0 MAX ANALYSIS","timestamp":"2026-07-08T11:30:01.928716+02:00","unix_timestamp":1783503001,"interval_minutes":30,"read_only":true,"ent
+/share/HomeAssist/system_health_tester/system_health_2026-07-08_11-00-01.json | 15309 bytes | 2026-07-08T11:00:02.100291
+  hit: {"meta":{"schema":"system-health-v18-max-analysis","tester":"SYSTEM-HEALTH TESTER v18.0 MAX ANALYSIS","timestamp":"2026-07-08T11:00:01.948152+02:00","unix_timestamp":1783501201,"interval_minutes":30,"read_only":true,"ent
+/share/HomeAssist/system_health_tester/system_health_2026-07-08_10-30-02.json | 15412 bytes | 2026-07-08T10:30:02.132754
+  hit: {"meta":{"schema":"system-health-v18-max-analysis","tester":"SYSTEM-HEALTH TESTER v18.0 MAX ANALYSIS","timestamp":"2026-07-08T10:30:01.971895+02:00","unix_timestamp":1783499401,"interval_minutes":30,"read_only":true,"ent
+/share/HomeAssist/system_health_tester/system_health_2026-07-08_10-00-01.json | 15115 bytes | 2026-07-08T10:00:02.118259
+  hit: {"meta":{"schema":"system-health-v18-max-analysis","tester":"SYSTEM-HEALTH TESTER v18.0 MAX ANALYSIS","timestamp":"2026-07-08T10:00:01.961738+02:00","unix_timestamp":1783497601,"interval_minutes":30,"read_only":true,"ent
+/share/se_nf_influence_audit_20260708_092835.txt | 19533 bytes | 2026-07-08T09:33:42.610754
+/share/HomeAssist/system_health_tester/system_health_2026-07-08_09-30-02.json | 15115 bytes | 2026-07-08T09:30:02.628756
+  hit: {"meta":{"schema":"system-health-v18-max-analysis","tester":"SYSTEM-HEALTH TESTER v18.0 MAX ANALYSIS","timestamp":"2026-07-08T09:30:02.362718+02:00","unix_timestamp":1783495802,"interval_minutes":30,"read_only":true,"ent
+/share/HomeAssist/system_health_tester/system_health_2026-07-08_09-00-00.json | 15920 bytes | 2026-07-08T09:00:00.476231
+  hit: {"meta":{"schema":"system-health-v18-max-analysis","tester":"SYSTEM-HEALTH TESTER v18.0 MAX ANALYSIS","timestamp":"2026-07-08T09:00:00.257399+02:00","unix_timestamp":1783494000,"interval_minutes":30,"read_only":true,"ent
+/share/HomeAssist/system_health_tester/system_health_2026-07-08_08-30-00.json | 15914 bytes | 2026-07-08T08:30:00.458719
+  hit: {"meta":{"schema":"system-health-v18-max-analysis","tester":"SYSTEM-HEALTH TESTER v18.0 MAX ANALYSIS","timestamp":"2026-07-08T08:30:00.307854+02:00","unix_timestamp":1783492200,"interval_minutes":30,"read_only":true,"ent

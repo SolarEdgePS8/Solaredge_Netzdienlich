@@ -1,0 +1,3468 @@
+# V3.0-rc3 portable entity mappings
+# V3.0-rc4 integration portability
+# V3.0-rc3d remaining candidate lists mapped
+# V3.0-rc3c remove mapping initial values
+# =====================================================================
+# SolarEdge Netzdienlich - Unified Package
+# Generated: 2026-07-03 10:45:05
+# Source: solaredge_netzdienlich.yaml + active V2.9.3 sidecars
+# =====================================================================
+
+###############################################################################
+# packages/solaredge_netzdienlich.yaml
+#
+# V2.8 Clean Session Controller
+# V2.9.0 Smartes Speichermanagement: Eigenversorgung / minimale Netzeinspeisung / Batterielebensdauer
+# V2.8.1 Planning Guard: 00:00/ungültige Startzeit darf keine Ladesession öffnen
+# V2.8.2 Weather Planning: Wetter früh/mittag/nachmittag wieder als ruhiger Planungsfaktor
+# V2.8.3 Weather Condition Fallback: nutzt condition, wenn cloud_coverage/precipitation_probability fehlen
+# V2.8.4 Weather Missing-Sample Fallback: kein Stundenforecast => current condition oder konservativer Faktor
+# V2.8.5 Current Weather Cap: aktueller Wetterzustand deckelt heutige Planung konservativ
+# V2.8.6 Safety Guard: Prioritäts-Open-Writes, hartes Schreibziel, Sanity-/Kompatibilitäts-Sensoren
+# V2.8.9 Stability Patch: Sanity-Fail-Open, defensiver 06:00-Reset, stabile SQL-7-Tage-Auswahl
+# V2.8.9a Log Cleanup: kurze Decision-Reason, numerische SQL-Fallbacks, echte 7-Tage-Auswahl
+#
+# Ziel:
+# - Rückbau der gewachsenen V2.4/V2.5/V2.6/V2.7-Reconcile-/Latch-/Self-Heal-Kette.
+# - Nur ein Stellhebel:
+#     number.solaredge_i1_storage_charge_limit
+# - Nur ein Writer.
+# - Nur eine Zielentscheidung.
+# - Nach OPEN kein Zurück auf CLOSED wegen Live-Margin-/Forecast-Schwankungen.
+#
+# Bedeutung SolarEdge Charge Limit:
+# - 0 W    = Speicher-Laden blockieren / PV zuerst Haus/Netz
+# - 5000 W = Speicher-Laden erlauben
+#
+# Session-Logik:
+# - CLOSED: morgens / vor Ladefenster, Ziel 0 W
+# - ARMED: Ladefenster berechnet, Ziel 0 W
+# - OPEN: Ladefenster aktiv, Ziel 5000 W
+# - BATTERY_FULL_OPEN: Akku voll während geöffneter Session, Ziel bleibt 5000 W
+# - DONE: PV-Ende + Nachlauf erreicht, Ziel 0 W
+# - EVCC_OVERRIDE: EVCC fordert Laden, Ziel 5000 W
+# - LOW_SOC: SoC zu niedrig, Ziel 5000 W
+# - RISK: relevante Daten fehlen, fail-open 5000 W
+#
+# Update-News / individuelle Anpassungen nach YAML-Update:
+# 1. input_text.se_nf_charge_limit_entity prüfen
+# 2. input_text.se_nf_pv_today_remaining_entity prüfen
+# 3. input_text.se_nf_pv_today_total_entity prüfen
+# 4. input_text.se_nf_pv_tomorrow_entity prüfen
+# 5. input_text.se_nf_battery_soe_entity prüfen
+# 6. input_text.se_nf_battery_capacity_entity prüfen
+# 7. input_number.se_nf_battery_capacity_kwh_fallback nur setzen,
+#    wenn SolarEdge keine Kapazität liefert
+# 8. sensor.se_nf_config_check muss "ok" sein
+# 9. sensor.se_nf_today_charge_window und sensor.se_nf_tomorrow_charge_window prüfen
+#
+# Bewusst nicht mehr enthalten:
+# - V2.5a Close-Reconcile als eigener SolarEdge-Schreiber
+# - V2.5b Open-Reconcile als eigener SolarEdge-Schreiber
+# - V2.6z Self-Heal als eigener SolarEdge-Schreiber
+# - mehrere parallele Writer
+# - festes weather. im Steuerpfad
+# - DWD-/Wetter-Hardcoding
+# - SQL-/7d-/Live-Margin-Rückkopplung als direkte Schreibgrundlage
+###############################################################################
+
+input_boolean:
+  se_netzdienlich_enabled:
+    name: "SolarEdge: Netzdienlich V2.8 aktiv"
+    icon: mdi:transmission-tower
+
+  se_netzdienlich_debug:
+    name: "SolarEdge: Netzdienlich V2.8 Debug"
+    icon: mdi:bug-outline
+
+  se_nf_weather_planning_enabled:
+    name: "Netzdienlich V2.8: Wetterplanung aktiv"
+    icon: mdi:weather-partly-cloudy
+
+  se_nf_lifetime_target_reached:
+    name: "Akku schonen: Ziel erreicht"
+    icon: mdi:battery-check
+
+  # >>> merged from solaredge_netzdienlich_v293a_adaptive_forecast_bias.yaml
+  se_nf_adaptive_forecast_bias_enabled:
+    name: SE NF Adaptive Forecast Bias Enabled
+    icon: mdi:chart-bell-curve
+  # <<< merged from solaredge_netzdienlich_v293a_adaptive_forecast_bias.yaml
+
+  # >>> merged from solaredge_netzdienlich_v293c_lifetime_latch_repair.yaml
+  se_nf_lifetime_latch_repair_enabled:
+    name: SE NF Lifetime Latch Repair Enabled
+    icon: mdi:battery-sync
+  # <<< merged from solaredge_netzdienlich_v293c_lifetime_latch_repair.yaml
+
+  # >>> merged from solaredge_netzdienlich_v293g_critical_deficit_daily_latch.yaml
+  se_nf_critical_deficit_latched_today:
+    name: "SE NF Critical Deficit Latched Today"
+    icon: mdi:lock-clock
+  # <<< merged from solaredge_netzdienlich_v293g_critical_deficit_daily_latch.yaml
+input_text:
+  se_nf_charge_limit_entity:
+    name: "Netzdienlich: SolarEdge Charge-Limit Entity"
+    icon: mdi:lightning-bolt
+    max: 255
+
+  se_nf_pv_today_remaining_entity:
+    name: "Netzdienlich: PV-Prognose heute verbleibend Entity"
+    icon: mdi:solar-power
+    max: 255
+
+  se_nf_pv_today_total_entity:
+    name: "Netzdienlich: PV-Prognose heute gesamt Entity"
+    icon: mdi:solar-power-variant
+    max: 255
+
+  se_nf_pv_tomorrow_entity:
+    name: "Netzdienlich: PV-Prognose morgen Entity"
+    icon: mdi:weather-sunny
+    max: 255
+
+  se_nf_battery_soe_entity:
+    name: "Netzdienlich: Speicher SoE Entity"
+    icon: mdi:battery-heart
+    max: 255
+
+  se_nf_battery_capacity_entity:
+    name: "Netzdienlich: Speicher Kapazität Entity"
+    icon: mdi:battery
+    max: 255
+
+  se_nf_backup_reserve_entity:
+    name: "Netzdienlich: Backup Reserve Entity optional"
+    icon: mdi:battery-lock
+    max: 255
+
+  se_nf_weather_entity:
+    name: "Netzdienlich: Wetter Entity optional"
+    icon: mdi:weather-partly-cloudy
+    max: 255
+
+  # >>> merged from solaredge_netzdienlich_v293a_adaptive_forecast_bias.yaml
+  se_nf_pv_actual_today_entity:
+    name: SE NF PV Ist Heute Entity
+    max: 255
+
+  se_nf_pv_overmorgen_entity:
+    name: SE NF PV Übermorgen Entity
+    max: 255
+  # <<< merged from solaredge_netzdienlich_v293a_adaptive_forecast_bias.yaml
+
+  # V3.0-rc3 portable entity mappings
+  se_nf_evcc_battery_mode_entity:
+    name: "SE NF Entity: EVCC Battery Mode"
+    icon: mdi:link-variant
+    max: 255
+
+  # V3.0-rc3 portable entity mappings
+  se_nf_daily_consumption_entity:
+    name: "SE NF Entity: Tagesverbrauch"
+    icon: mdi:link-variant
+    max: 255
+
+  # V3.0-rc3 portable entity mappings
+  se_nf_live_pv_power_entities:
+    name: "SE NF Entities: Live PV Leistung"
+    icon: mdi:link-variant
+    max: 255
+
+  # V3.0-rc3 portable entity mappings
+  se_nf_actual_pv_today_entities:
+    name: "SE NF Entities: PV Ist heute"
+    icon: mdi:link-variant
+    max: 255
+
+  # V3.0-rc3 portable entity mappings
+  se_nf_forecast_now_entity:
+    name: "SE NF Entity: PV Prognose Leistung jetzt"
+    icon: mdi:link-variant
+    max: 255
+
+  # V3.0-rc3 portable entity mappings
+  se_nf_pv_overmorrow_entities:
+    name: "SE NF Entities: PV Prognose übermorgen"
+    icon: mdi:link-variant
+    max: 255
+
+  # V3.0-rc4: integration portability mapping
+  se_nf_pv_actual_meter_source_entity:
+    name: "SE NF Entity: PV Energy Source for Utility Meter"
+    icon: mdi:solar-power-variant
+    max: 255
+
+  # V3.0-rc4: integration portability mapping
+  se_nf_sql_db_path:
+    name: "SE NF SQL: Recorder DB Path"
+    icon: mdi:database-cog
+    max: 255
+input_number:
+  se_nf_closed_charge_limit_w:
+    name: "Netzdienlich V2.8: Charge-Limit geschlossen"
+    icon: mdi:battery-off-outline
+    min: 0
+    max: 5000
+    step: 50
+    mode: box
+    unit_of_measurement: "W"
+
+  se_nf_open_charge_limit_w:
+    name: "Netzdienlich V2.8: Charge-Limit offen"
+    icon: mdi:battery-arrow-up
+    min: 0
+    max: 5000
+    step: 50
+    mode: box
+    unit_of_measurement: "W"
+
+  se_nf_battery_capacity_kwh_fallback:
+    name: "Netzdienlich V2.8: Speicher-Kapazität Fallback"
+    icon: mdi:battery
+    min: 0
+    max: 50
+    step: 0.05
+    mode: box
+    unit_of_measurement: "kWh"
+
+  se_nf_target_soc_pct:
+    name: "Netzdienlich laden: Ziel-Ladestand"
+    icon: mdi:battery-90
+    min: 50
+    max: 100
+    step: 0.5
+    mode: slider
+    unit_of_measurement: "%"
+
+  se_nf_lifetime_min_start_hour:
+    name: "Akku schonen: frühester Ladebeginn"
+    icon: mdi:clock-start
+    min: 10
+    max: 19
+    step: 0.25
+    mode: slider
+    unit_of_measurement: "h"
+
+  se_nf_lifetime_latest_finish_hour:
+    name: "Akku schonen: spätestens fertig"
+    icon: mdi:clock-end
+    min: 14
+    max: 22
+    step: 0.25
+    mode: slider
+    unit_of_measurement: "h"
+
+  se_nf_lifetime_start_safety_buffer_min:
+    name: "Akku schonen: Zeitpuffer vor Ende"
+    icon: mdi:clock-alert-outline
+    min: 0
+    max: 120
+    step: 5
+    mode: slider
+    unit_of_measurement: "min"
+
+  se_nf_lifetime_min_soc_pct:
+    name: "Akku schonen: Mindest-Ladestand"
+    icon: mdi:battery-50
+    min: 20
+    max: 80
+    step: 0.5
+    mode: slider
+    unit_of_measurement: "%"
+
+  se_nf_lifetime_max_soc_pct:
+    name: "Akku schonen: maximaler Ladestand"
+    icon: mdi:battery-80
+    min: 50
+    max: 95
+    step: 0.5
+    mode: slider
+    unit_of_measurement: "%"
+
+  se_nf_lifetime_safety_kwh:
+    name: "Akku schonen: Reserve für die Nacht"
+    icon: mdi:shield-plus-outline
+    min: 0
+    max: 5
+    step: 0.1
+    mode: slider
+    unit_of_measurement: "kWh"
+
+  se_nf_lifetime_night_fallback_kwh:
+    name: "Akku schonen: Nachtbedarf wenn Prognose fehlt"
+    icon: mdi:weather-night
+    min: 1
+    max: 15
+    step: 0.1
+    mode: box
+    unit_of_measurement: "kWh"
+
+  se_nf_low_soc_floor_pct:
+    name: "Netzdienlich V2.8: Low-SoC Schwelle"
+    icon: mdi:battery-alert
+    min: 0
+    max: 40
+    step: 0.5
+    mode: slider
+    unit_of_measurement: "%"
+
+  se_nf_manual_daily_consumption_kwh:
+    name: "Netzdienlich V2.8: Tagesverbrauch Fallback"
+    icon: mdi:home-lightning-bolt
+    min: 1
+    max: 60
+    step: 0.5
+    mode: box
+    unit_of_measurement: "kWh"
+
+  se_nf_max_sensor_age_s:
+    name: "Netzdienlich V2.8: Max. Sensoralter"
+    icon: mdi:timer-alert-outline
+    min: 1800
+    max: 28800
+    step: 600
+    mode: box
+    unit_of_measurement: "s"
+
+  se_nf_load_forecast_safety_factor:
+    name: "Netzdienlich V2.8: Verbrauchsprognose Sicherheitsfaktor"
+    icon: mdi:shield-percent-outline
+    min: 1.00
+    max: 1.30
+    step: 0.01
+    mode: box
+
+  se_nf_coverage_lead_max_min:
+    name: "Netzdienlich V2.8: Max. Vorzug bei wenig PV-Puffer"
+    icon: mdi:clock-fast
+    min: 0
+    max: 180
+    step: 5
+    mode: slider
+    unit_of_measurement: "min"
+
+
+  se_nf_planning_charge_power_w:
+    name: "Netzdienlich V2.8: Rechen-Ladeleistung"
+    icon: mdi:flash
+    min: 1000
+    max: 5000
+    step: 100
+    mode: slider
+    unit_of_measurement: "W"
+
+  se_nf_start_safety_buffer_min:
+    name: "Netzdienlich V2.8: Start-Sicherheitspuffer"
+    icon: mdi:clock-alert-outline
+    min: 0
+    max: 180
+    step: 5
+    mode: slider
+    unit_of_measurement: "min"
+
+  se_nf_min_start_hour:
+    name: "Netzdienlich V2.8: Frühester Normalstart"
+    icon: mdi:clock-start
+    min: 6
+    max: 18
+    step: 0.25
+    mode: slider
+    unit_of_measurement: "h"
+
+  se_nf_latest_finish_hour:
+    name: "Netzdienlich V2.8: Ziel-Fertig-Zeit"
+    icon: mdi:clock-end
+    min: 12
+    max: 22
+    step: 0.25
+    mode: slider
+    unit_of_measurement: "h"
+
+  se_nf_session_end_grace_min:
+    name: "Netzdienlich V2.8: Session-Nachlauf nach Ziel-Ende"
+    icon: mdi:timer-sand
+    min: 0
+    max: 180
+    step: 5
+    mode: slider
+    unit_of_measurement: "min"
+
+  se_nf_weather_current_weight_pct:
+    name: "Netzdienlich V2.8: Gewicht aktuelles Wetter"
+    icon: mdi:weather-cloudy-clock
+    min: 0
+    max: 80
+    step: 5
+    mode: slider
+    unit_of_measurement: "%"
+
+  se_nf_weather_missing_forecast_factor:
+    name: "Netzdienlich V2.8: Wetter-Fallback ohne Stundenforecast"
+    icon: mdi:weather-question
+    min: 0.55
+    max: 1.00
+    step: 0.05
+    mode: slider
+
+  se_nf_weather_max_lead_min:
+    name: "Netzdienlich V2.8: Max. Wetter-Vorverlegung"
+    icon: mdi:weather-cloudy-clock
+    min: 0
+    max: 180
+    step: 5
+    mode: slider
+    unit_of_measurement: "min"
+
+  se_nf_replan_threshold_min:
+    name: "Netzdienlich V2.8: Replan-Schwelle vor OPEN"
+    icon: mdi:calendar-sync
+    min: 0
+    max: 180
+    step: 5
+    mode: slider
+    unit_of_measurement: "min"
+
+  se_nf_write_min_delta_w:
+    name: "Netzdienlich V2.8: Min. Änderung für Write"
+    icon: mdi:delta
+    min: 0
+    max: 1000
+    step: 50
+    mode: slider
+    unit_of_measurement: "W"
+
+  se_nf_write_cooldown_s:
+    name: "Netzdienlich V2.8: Write-Cooldown"
+    icon: mdi:timer-sand
+    min: 60
+    max: 1800
+    step: 30
+    mode: slider
+    unit_of_measurement: "s"
+
+  se_nf_write_lock_s:
+    name: "Netzdienlich V2.8: Write-Lock"
+    icon: mdi:lock-clock
+    min: 10
+    max: 300
+    step: 5
+    mode: slider
+    unit_of_measurement: "s"
+
+  se_nf_last_applied_charge_limit_w:
+    name: "Netzdienlich V2.8: Letztes bestätigtes Charge-Limit"
+    icon: mdi:check-decagram-outline
+    min: 0
+    max: 5000
+    step: 50
+    mode: box
+    unit_of_measurement: "W"
+    initial: 5000
+
+  # >>> merged from solaredge_speicher_user_settings.yaml
+  se_nf_battery_capacity_kwh_manual:
+    name: "Speichergröße manuell"
+    icon: mdi:battery-high
+    min: 0
+    max: 50
+    step: 0.1
+    mode: box
+    unit_of_measurement: "kWh"
+  # <<< merged from solaredge_speicher_user_settings.yaml
+
+  # >>> merged from solaredge_speicher_user_settings.yaml
+  se_nf_lifetime_soc_buffer_pct:
+    name: "Akku schonen: zusätzlicher Puffer"
+    icon: mdi:battery-plus-variant
+    min: 0
+    max: 60
+    step: 10
+    mode: slider
+    unit_of_measurement: "%"
+  # <<< merged from solaredge_speicher_user_settings.yaml
+input_select:
+  se_nf_optimization_mode:
+    name: "Netzdienlich V2.9:  Optimierungsmodus"
+    icon: mdi:tune-variant
+    options:
+      - Eigenverbrauch maximieren
+      - Netzdienlich laden
+      - Akku schonen
+
+  se_nf_session_state:
+    name: "Netzdienlich V2.8: Session State"
+    icon: mdi:state-machine
+    options:
+      - closed
+      - armed
+      - open
+      - battery_full_open
+      - done
+      - evcc_override
+      - low_soc
+      - risk
+    initial: closed
+input_datetime:
+  se_nf_session_planned_start:
+    name: "Netzdienlich V2.8: Geplanter Start"
+    icon: mdi:clock-start
+    has_date: true
+    has_time: true
+
+  se_nf_last_open_write:
+    name: "Netzdienlich V2.8: Letzte Ladefreigabe"
+    icon: mdi:timer-lock-open
+    has_date: true
+    has_time: true
+
+  se_nf_last_write:
+    name: "Netzdienlich V2.8: Letzter Write"
+    icon: mdi:clock-outline
+    has_date: true
+    has_time: true
+
+  se_nf_write_lock_until:
+    name: "Netzdienlich V2.8: Write-Lock bis"
+    icon: mdi:lock-clock
+    has_date: true
+    has_time: true
+template:
+  - trigger:
+      - platform: homeassistant
+        event: start
+      - platform: time_pattern
+        minutes: "/30"
+      - platform: state
+        entity_id:
+          - input_text.se_nf_weather_entity
+          - input_boolean.se_nf_weather_planning_enabled
+    action:
+      - variables:
+          w_entity: >-
+            {% set cfg = states('input_text.se_nf_weather_entity') | trim %}
+            {% if cfg %}
+              {{ cfg }}
+            {% else %}
+              {% set ws = states.weather | list %}
+              {% if ws | count > 0 %}
+                {{ ws[0].entity_id }}
+              {% else %}
+                unknown
+              {% endif %}
+            {% endif %}
+      - if:
+          - condition: template
+            value_template: "{{ w_entity not in ['unknown','unavailable','none',''] and w_entity.startswith('weather.') }}"
+        then:
+          - service: weather.get_forecasts
+            target:
+              entity_id: "{{ w_entity }}"
+            data:
+              type: hourly
+            response_variable: se_nf_weather_hourly
+        else:
+          - variables:
+              se_nf_weather_hourly: {}
+    sensor:
+      - name: "SE NF Weather Factor Today Morning"
+        unique_id: se_nf_weather_factor_today_morning
+        icon: mdi:weather-sunset-up
+        state: >-
+          {% if is_state('input_boolean.se_nf_weather_planning_enabled','off') %}
+            1.00
+          {% else %}
+            {% set ent = w_entity | trim %}
+            {% set fc = se_nf_weather_hourly.get(ent, {}).get('forecast', []) if se_nf_weather_hourly is defined else [] %}
+            {% set target_day = now().strftime('%Y-%m-%d') %}
+            {% set ns = namespace(sum=0, cnt=0) %}
+
+            {% for item in fc %}
+              {% set ts = as_timestamp(item.datetime | default('', true), 0) | int(0) %}
+              {% if ts > 0 %}
+                {% set d = ts | timestamp_custom('%Y-%m-%d', true) %}
+                {% set h = ts | timestamp_custom('%H', true) | int(0) %}
+
+                {% if d == target_day and h >= 6 and h <= 10 %}
+                  {% set cond = item.condition | default('', true) | lower %}
+
+                  {% if item.cloud_coverage is defined and item.cloud_coverage is not none %}
+                    {% set cloud = item.cloud_coverage | float(0) %}
+                    {% if cloud <= 20 %}
+                      {% set cf = 1.00 %}
+                    {% elif cloud <= 50 %}
+                      {% set cf = 0.92 %}
+                    {% elif cloud <= 75 %}
+                      {% set cf = 0.82 %}
+                    {% else %}
+                      {% set cf = 0.68 %}
+                    {% endif %}
+                  {% else %}
+                    {% if cond in ['sunny', 'clear-night'] or 'sonnig' in cond or 'klar' in cond %}
+                      {% set cf = 1.00 %}
+                    {% elif cond in ['partlycloudy', 'partly-cloudy'] or 'partly' in cond or 'heiter' in cond or 'leicht' in cond %}
+                      {% set cf = 0.90 %}
+                    {% elif cond in ['cloudy'] or 'cloud' in cond or 'bewölkt' in cond or 'bedeckt' in cond or 'overcast' in cond %}
+                      {% set cf = 0.75 %}
+                    {% elif cond in ['fog'] or 'fog' in cond or 'nebel' in cond %}
+                      {% set cf = 0.70 %}
+                    {% elif cond in ['rainy', 'pouring'] or 'rain' in cond or 'regen' in cond or 'schauer' in cond %}
+                      {% set cf = 0.62 %}
+                    {% elif cond in ['lightning', 'lightning-rainy'] or 'thunder' in cond or 'gewitter' in cond %}
+                      {% set cf = 0.55 %}
+                    {% elif cond in ['snowy', 'snowy-rainy'] or 'snow' in cond or 'schnee' in cond %}
+                      {% set cf = 0.60 %}
+                    {% else %}
+                      {% set cf = states('input_number.se_nf_weather_missing_forecast_factor') | float(0.85) %}
+                    {% endif %}
+                  {% endif %}
+
+                  {% if item.precipitation_probability is defined and item.precipitation_probability is not none %}
+                    {% set p = item.precipitation_probability | float(0) %}
+                    {% if p < 20 %}
+                      {% set rf = 1.00 %}
+                    {% elif p < 40 %}
+                      {% set rf = 0.94 %}
+                    {% elif p < 60 %}
+                      {% set rf = 0.84 %}
+                    {% elif p < 80 %}
+                      {% set rf = 0.74 %}
+                    {% else %}
+                      {% set rf = 0.64 %}
+                    {% endif %}
+                  {% else %}
+                    {% set precip = item.precipitation | default(0) | float(0) %}
+                    {% if precip > 1.0 %}
+                      {% set rf = 0.68 %}
+                    {% elif precip > 0.2 %}
+                      {% set rf = 0.82 %}
+                    {% elif 'rain' in cond or 'regen' in cond or 'schauer' in cond %}
+                      {% set rf = 0.76 %}
+                    {% elif 'thunder' in cond or 'gewitter' in cond or 'lightning' in cond %}
+                      {% set rf = 0.62 %}
+                    {% else %}
+                      {% set rf = 1.00 %}
+                    {% endif %}
+                  {% endif %}
+
+                  {% set factor = ((cf * 0.70) + (rf * 0.30)) %}
+                  {% set ns.sum = ns.sum + factor %}
+                  {% set ns.cnt = ns.cnt + 1 %}
+                {% endif %}
+              {% endif %}
+            {% endfor %}
+
+            {% if ns.cnt > 0 %}
+              {{ [[ns.sum / ns.cnt, 0.55] | max, 1.00] | min | round(2) }}
+            {% else %}
+              {# Kein Stundenforecast passend gefunden:
+                 nicht mehr blind 1.00, sondern current condition oder konservativer Fallback. #}
+              {% set curr = states(ent) | lower %}
+              {% if curr in ['sunny', 'clear-night'] or 'sonnig' in curr or 'klar' in curr %}
+                1.00
+              {% elif curr in ['partlycloudy', 'partly-cloudy'] or 'partly' in curr or 'heiter' in curr or 'leicht' in curr %}
+                0.90
+              {% elif curr in ['cloudy'] or 'cloud' in curr or 'bewölkt' in curr or 'bedeckt' in curr or 'overcast' in curr %}
+                0.75
+              {% elif curr in ['fog'] or 'fog' in curr or 'nebel' in curr %}
+                0.70
+              {% elif curr in ['rainy', 'pouring'] or 'rain' in curr or 'regen' in curr or 'schauer' in curr %}
+                0.62
+              {% elif curr in ['lightning', 'lightning-rainy'] or 'thunder' in curr or 'gewitter' in curr %}
+                0.55
+              {% elif curr in ['snowy', 'snowy-rainy'] or 'snow' in curr or 'schnee' in curr %}
+                0.60
+              {% else %}
+                {{ states('input_number.se_nf_weather_missing_forecast_factor') | float(0.85) | round(2) }}
+              {% endif %}
+            {% endif %}
+          {% endif %}
+        attributes:
+          period: "today_06_10"
+          note: "hourly forecast preferred; current weather/fallback if no matching hourly samples"
+      - name: "SE NF Weather Factor Today Midday"
+        unique_id: se_nf_weather_factor_today_midday
+        icon: mdi:weather-sunny
+        state: >-
+          {% if is_state('input_boolean.se_nf_weather_planning_enabled','off') %}
+            1.00
+          {% else %}
+            {% set ent = w_entity | trim %}
+            {% set fc = se_nf_weather_hourly.get(ent, {}).get('forecast', []) if se_nf_weather_hourly is defined else [] %}
+            {% set target_day = now().strftime('%Y-%m-%d') %}
+            {% set ns = namespace(sum=0, cnt=0) %}
+
+            {% for item in fc %}
+              {% set ts = as_timestamp(item.datetime | default('', true), 0) | int(0) %}
+              {% if ts > 0 %}
+                {% set d = ts | timestamp_custom('%Y-%m-%d', true) %}
+                {% set h = ts | timestamp_custom('%H', true) | int(0) %}
+
+                {% if d == target_day and h >= 11 and h <= 14 %}
+                  {% set cond = item.condition | default('', true) | lower %}
+
+                  {% if item.cloud_coverage is defined and item.cloud_coverage is not none %}
+                    {% set cloud = item.cloud_coverage | float(0) %}
+                    {% if cloud <= 20 %}
+                      {% set cf = 1.00 %}
+                    {% elif cloud <= 50 %}
+                      {% set cf = 0.92 %}
+                    {% elif cloud <= 75 %}
+                      {% set cf = 0.82 %}
+                    {% else %}
+                      {% set cf = 0.68 %}
+                    {% endif %}
+                  {% else %}
+                    {% if cond in ['sunny', 'clear-night'] or 'sonnig' in cond or 'klar' in cond %}
+                      {% set cf = 1.00 %}
+                    {% elif cond in ['partlycloudy', 'partly-cloudy'] or 'partly' in cond or 'heiter' in cond or 'leicht' in cond %}
+                      {% set cf = 0.90 %}
+                    {% elif cond in ['cloudy'] or 'cloud' in cond or 'bewölkt' in cond or 'bedeckt' in cond or 'overcast' in cond %}
+                      {% set cf = 0.75 %}
+                    {% elif cond in ['fog'] or 'fog' in cond or 'nebel' in cond %}
+                      {% set cf = 0.70 %}
+                    {% elif cond in ['rainy', 'pouring'] or 'rain' in cond or 'regen' in cond or 'schauer' in cond %}
+                      {% set cf = 0.62 %}
+                    {% elif cond in ['lightning', 'lightning-rainy'] or 'thunder' in cond or 'gewitter' in cond %}
+                      {% set cf = 0.55 %}
+                    {% elif cond in ['snowy', 'snowy-rainy'] or 'snow' in cond or 'schnee' in cond %}
+                      {% set cf = 0.60 %}
+                    {% else %}
+                      {% set cf = states('input_number.se_nf_weather_missing_forecast_factor') | float(0.85) %}
+                    {% endif %}
+                  {% endif %}
+
+                  {% if item.precipitation_probability is defined and item.precipitation_probability is not none %}
+                    {% set p = item.precipitation_probability | float(0) %}
+                    {% if p < 20 %}
+                      {% set rf = 1.00 %}
+                    {% elif p < 40 %}
+                      {% set rf = 0.94 %}
+                    {% elif p < 60 %}
+                      {% set rf = 0.84 %}
+                    {% elif p < 80 %}
+                      {% set rf = 0.74 %}
+                    {% else %}
+                      {% set rf = 0.64 %}
+                    {% endif %}
+                  {% else %}
+                    {% set precip = item.precipitation | default(0) | float(0) %}
+                    {% if precip > 1.0 %}
+                      {% set rf = 0.68 %}
+                    {% elif precip > 0.2 %}
+                      {% set rf = 0.82 %}
+                    {% elif 'rain' in cond or 'regen' in cond or 'schauer' in cond %}
+                      {% set rf = 0.76 %}
+                    {% elif 'thunder' in cond or 'gewitter' in cond or 'lightning' in cond %}
+                      {% set rf = 0.62 %}
+                    {% else %}
+                      {% set rf = 1.00 %}
+                    {% endif %}
+                  {% endif %}
+
+                  {% set factor = ((cf * 0.70) + (rf * 0.30)) %}
+                  {% set ns.sum = ns.sum + factor %}
+                  {% set ns.cnt = ns.cnt + 1 %}
+                {% endif %}
+              {% endif %}
+            {% endfor %}
+
+            {% if ns.cnt > 0 %}
+              {{ [[ns.sum / ns.cnt, 0.55] | max, 1.00] | min | round(2) }}
+            {% else %}
+              {# Kein Stundenforecast passend gefunden:
+                 nicht mehr blind 1.00, sondern current condition oder konservativer Fallback. #}
+              {% set curr = states(ent) | lower %}
+              {% if curr in ['sunny', 'clear-night'] or 'sonnig' in curr or 'klar' in curr %}
+                1.00
+              {% elif curr in ['partlycloudy', 'partly-cloudy'] or 'partly' in curr or 'heiter' in curr or 'leicht' in curr %}
+                0.90
+              {% elif curr in ['cloudy'] or 'cloud' in curr or 'bewölkt' in curr or 'bedeckt' in curr or 'overcast' in curr %}
+                0.75
+              {% elif curr in ['fog'] or 'fog' in curr or 'nebel' in curr %}
+                0.70
+              {% elif curr in ['rainy', 'pouring'] or 'rain' in curr or 'regen' in curr or 'schauer' in curr %}
+                0.62
+              {% elif curr in ['lightning', 'lightning-rainy'] or 'thunder' in curr or 'gewitter' in curr %}
+                0.55
+              {% elif curr in ['snowy', 'snowy-rainy'] or 'snow' in curr or 'schnee' in curr %}
+                0.60
+              {% else %}
+                {{ states('input_number.se_nf_weather_missing_forecast_factor') | float(0.85) | round(2) }}
+              {% endif %}
+            {% endif %}
+          {% endif %}
+        attributes:
+          period: "today_11_14"
+          note: "hourly forecast preferred; current weather/fallback if no matching hourly samples"
+      - name: "SE NF Weather Factor Today Afternoon"
+        unique_id: se_nf_weather_factor_today_afternoon
+        icon: mdi:weather-sunset-down
+        state: >-
+          {% if is_state('input_boolean.se_nf_weather_planning_enabled','off') %}
+            1.00
+          {% else %}
+            {% set ent = w_entity | trim %}
+            {% set fc = se_nf_weather_hourly.get(ent, {}).get('forecast', []) if se_nf_weather_hourly is defined else [] %}
+            {% set target_day = now().strftime('%Y-%m-%d') %}
+            {% set ns = namespace(sum=0, cnt=0) %}
+
+            {% for item in fc %}
+              {% set ts = as_timestamp(item.datetime | default('', true), 0) | int(0) %}
+              {% if ts > 0 %}
+                {% set d = ts | timestamp_custom('%Y-%m-%d', true) %}
+                {% set h = ts | timestamp_custom('%H', true) | int(0) %}
+
+                {% if d == target_day and h >= 15 and h <= 18 %}
+                  {% set cond = item.condition | default('', true) | lower %}
+
+                  {% if item.cloud_coverage is defined and item.cloud_coverage is not none %}
+                    {% set cloud = item.cloud_coverage | float(0) %}
+                    {% if cloud <= 20 %}
+                      {% set cf = 1.00 %}
+                    {% elif cloud <= 50 %}
+                      {% set cf = 0.92 %}
+                    {% elif cloud <= 75 %}
+                      {% set cf = 0.82 %}
+                    {% else %}
+                      {% set cf = 0.68 %}
+                    {% endif %}
+                  {% else %}
+                    {% if cond in ['sunny', 'clear-night'] or 'sonnig' in cond or 'klar' in cond %}
+                      {% set cf = 1.00 %}
+                    {% elif cond in ['partlycloudy', 'partly-cloudy'] or 'partly' in cond or 'heiter' in cond or 'leicht' in cond %}
+                      {% set cf = 0.90 %}
+                    {% elif cond in ['cloudy'] or 'cloud' in cond or 'bewölkt' in cond or 'bedeckt' in cond or 'overcast' in cond %}
+                      {% set cf = 0.75 %}
+                    {% elif cond in ['fog'] or 'fog' in cond or 'nebel' in cond %}
+                      {% set cf = 0.70 %}
+                    {% elif cond in ['rainy', 'pouring'] or 'rain' in cond or 'regen' in cond or 'schauer' in cond %}
+                      {% set cf = 0.62 %}
+                    {% elif cond in ['lightning', 'lightning-rainy'] or 'thunder' in cond or 'gewitter' in cond %}
+                      {% set cf = 0.55 %}
+                    {% elif cond in ['snowy', 'snowy-rainy'] or 'snow' in cond or 'schnee' in cond %}
+                      {% set cf = 0.60 %}
+                    {% else %}
+                      {% set cf = states('input_number.se_nf_weather_missing_forecast_factor') | float(0.85) %}
+                    {% endif %}
+                  {% endif %}
+
+                  {% if item.precipitation_probability is defined and item.precipitation_probability is not none %}
+                    {% set p = item.precipitation_probability | float(0) %}
+                    {% if p < 20 %}
+                      {% set rf = 1.00 %}
+                    {% elif p < 40 %}
+                      {% set rf = 0.94 %}
+                    {% elif p < 60 %}
+                      {% set rf = 0.84 %}
+                    {% elif p < 80 %}
+                      {% set rf = 0.74 %}
+                    {% else %}
+                      {% set rf = 0.64 %}
+                    {% endif %}
+                  {% else %}
+                    {% set precip = item.precipitation | default(0) | float(0) %}
+                    {% if precip > 1.0 %}
+                      {% set rf = 0.68 %}
+                    {% elif precip > 0.2 %}
+                      {% set rf = 0.82 %}
+                    {% elif 'rain' in cond or 'regen' in cond or 'schauer' in cond %}
+                      {% set rf = 0.76 %}
+                    {% elif 'thunder' in cond or 'gewitter' in cond or 'lightning' in cond %}
+                      {% set rf = 0.62 %}
+                    {% else %}
+                      {% set rf = 1.00 %}
+                    {% endif %}
+                  {% endif %}
+
+                  {% set factor = ((cf * 0.70) + (rf * 0.30)) %}
+                  {% set ns.sum = ns.sum + factor %}
+                  {% set ns.cnt = ns.cnt + 1 %}
+                {% endif %}
+              {% endif %}
+            {% endfor %}
+
+            {% if ns.cnt > 0 %}
+              {{ [[ns.sum / ns.cnt, 0.55] | max, 1.00] | min | round(2) }}
+            {% else %}
+              {# Kein Stundenforecast passend gefunden:
+                 nicht mehr blind 1.00, sondern current condition oder konservativer Fallback. #}
+              {% set curr = states(ent) | lower %}
+              {% if curr in ['sunny', 'clear-night'] or 'sonnig' in curr or 'klar' in curr %}
+                1.00
+              {% elif curr in ['partlycloudy', 'partly-cloudy'] or 'partly' in curr or 'heiter' in curr or 'leicht' in curr %}
+                0.90
+              {% elif curr in ['cloudy'] or 'cloud' in curr or 'bewölkt' in curr or 'bedeckt' in curr or 'overcast' in curr %}
+                0.75
+              {% elif curr in ['fog'] or 'fog' in curr or 'nebel' in curr %}
+                0.70
+              {% elif curr in ['rainy', 'pouring'] or 'rain' in curr or 'regen' in curr or 'schauer' in curr %}
+                0.62
+              {% elif curr in ['lightning', 'lightning-rainy'] or 'thunder' in curr or 'gewitter' in curr %}
+                0.55
+              {% elif curr in ['snowy', 'snowy-rainy'] or 'snow' in curr or 'schnee' in curr %}
+                0.60
+              {% else %}
+                {{ states('input_number.se_nf_weather_missing_forecast_factor') | float(0.85) | round(2) }}
+              {% endif %}
+            {% endif %}
+          {% endif %}
+        attributes:
+          period: "today_15_18"
+          note: "hourly forecast preferred; current weather/fallback if no matching hourly samples"
+      - name: "SE NF Weather Factor Tomorrow Morning"
+        unique_id: se_nf_weather_factor_tomorrow_morning
+        icon: mdi:weather-sunset-up
+        state: >-
+          {% if is_state('input_boolean.se_nf_weather_planning_enabled','off') %}
+            1.00
+          {% else %}
+            {% set ent = w_entity | trim %}
+            {% set fc = se_nf_weather_hourly.get(ent, {}).get('forecast', []) if se_nf_weather_hourly is defined else [] %}
+            {% set target_day = (now() + timedelta(days=1)).strftime('%Y-%m-%d') %}
+            {% set ns = namespace(sum=0, cnt=0) %}
+
+            {% for item in fc %}
+              {% set ts = as_timestamp(item.datetime | default('', true), 0) | int(0) %}
+              {% if ts > 0 %}
+                {% set d = ts | timestamp_custom('%Y-%m-%d', true) %}
+                {% set h = ts | timestamp_custom('%H', true) | int(0) %}
+
+                {% if d == target_day and h >= 6 and h <= 10 %}
+                  {% set cond = item.condition | default('', true) | lower %}
+
+                  {% if item.cloud_coverage is defined and item.cloud_coverage is not none %}
+                    {% set cloud = item.cloud_coverage | float(0) %}
+                    {% if cloud <= 20 %}
+                      {% set cf = 1.00 %}
+                    {% elif cloud <= 50 %}
+                      {% set cf = 0.92 %}
+                    {% elif cloud <= 75 %}
+                      {% set cf = 0.82 %}
+                    {% else %}
+                      {% set cf = 0.68 %}
+                    {% endif %}
+                  {% else %}
+                    {% if cond in ['sunny', 'clear-night'] or 'sonnig' in cond or 'klar' in cond %}
+                      {% set cf = 1.00 %}
+                    {% elif cond in ['partlycloudy', 'partly-cloudy'] or 'partly' in cond or 'heiter' in cond or 'leicht' in cond %}
+                      {% set cf = 0.90 %}
+                    {% elif cond in ['cloudy'] or 'cloud' in cond or 'bewölkt' in cond or 'bedeckt' in cond or 'overcast' in cond %}
+                      {% set cf = 0.75 %}
+                    {% elif cond in ['fog'] or 'fog' in cond or 'nebel' in cond %}
+                      {% set cf = 0.70 %}
+                    {% elif cond in ['rainy', 'pouring'] or 'rain' in cond or 'regen' in cond or 'schauer' in cond %}
+                      {% set cf = 0.62 %}
+                    {% elif cond in ['lightning', 'lightning-rainy'] or 'thunder' in cond or 'gewitter' in cond %}
+                      {% set cf = 0.55 %}
+                    {% elif cond in ['snowy', 'snowy-rainy'] or 'snow' in cond or 'schnee' in cond %}
+                      {% set cf = 0.60 %}
+                    {% else %}
+                      {% set cf = states('input_number.se_nf_weather_missing_forecast_factor') | float(0.85) %}
+                    {% endif %}
+                  {% endif %}
+
+                  {% if item.precipitation_probability is defined and item.precipitation_probability is not none %}
+                    {% set p = item.precipitation_probability | float(0) %}
+                    {% if p < 20 %}
+                      {% set rf = 1.00 %}
+                    {% elif p < 40 %}
+                      {% set rf = 0.94 %}
+                    {% elif p < 60 %}
+                      {% set rf = 0.84 %}
+                    {% elif p < 80 %}
+                      {% set rf = 0.74 %}
+                    {% else %}
+                      {% set rf = 0.64 %}
+                    {% endif %}
+                  {% else %}
+                    {% set precip = item.precipitation | default(0) | float(0) %}
+                    {% if precip > 1.0 %}
+                      {% set rf = 0.68 %}
+                    {% elif precip > 0.2 %}
+                      {% set rf = 0.82 %}
+                    {% elif 'rain' in cond or 'regen' in cond or 'schauer' in cond %}
+                      {% set rf = 0.76 %}
+                    {% elif 'thunder' in cond or 'gewitter' in cond or 'lightning' in cond %}
+                      {% set rf = 0.62 %}
+                    {% else %}
+                      {% set rf = 1.00 %}
+                    {% endif %}
+                  {% endif %}
+
+                  {% set factor = ((cf * 0.70) + (rf * 0.30)) %}
+                  {% set ns.sum = ns.sum + factor %}
+                  {% set ns.cnt = ns.cnt + 1 %}
+                {% endif %}
+              {% endif %}
+            {% endfor %}
+
+            {% if ns.cnt > 0 %}
+              {{ [[ns.sum / ns.cnt, 0.55] | max, 1.00] | min | round(2) }}
+            {% else %}
+              {# Kein Stundenforecast passend gefunden:
+                 nicht mehr blind 1.00, sondern current condition oder konservativer Fallback. #}
+              {% set curr = states(ent) | lower %}
+              {% if curr in ['sunny', 'clear-night'] or 'sonnig' in curr or 'klar' in curr %}
+                1.00
+              {% elif curr in ['partlycloudy', 'partly-cloudy'] or 'partly' in curr or 'heiter' in curr or 'leicht' in curr %}
+                0.90
+              {% elif curr in ['cloudy'] or 'cloud' in curr or 'bewölkt' in curr or 'bedeckt' in curr or 'overcast' in curr %}
+                0.75
+              {% elif curr in ['fog'] or 'fog' in curr or 'nebel' in curr %}
+                0.70
+              {% elif curr in ['rainy', 'pouring'] or 'rain' in curr or 'regen' in curr or 'schauer' in curr %}
+                0.62
+              {% elif curr in ['lightning', 'lightning-rainy'] or 'thunder' in curr or 'gewitter' in curr %}
+                0.55
+              {% elif curr in ['snowy', 'snowy-rainy'] or 'snow' in curr or 'schnee' in curr %}
+                0.60
+              {% else %}
+                {{ states('input_number.se_nf_weather_missing_forecast_factor') | float(0.85) | round(2) }}
+              {% endif %}
+            {% endif %}
+          {% endif %}
+        attributes:
+          period: "tomorrow_06_10"
+          note: "hourly forecast preferred; current weather/fallback if no matching hourly samples"
+      - name: "SE NF Weather Factor Tomorrow Midday"
+        unique_id: se_nf_weather_factor_tomorrow_midday
+        icon: mdi:weather-sunny
+        state: >-
+          {% if is_state('input_boolean.se_nf_weather_planning_enabled','off') %}
+            1.00
+          {% else %}
+            {% set ent = w_entity | trim %}
+            {% set fc = se_nf_weather_hourly.get(ent, {}).get('forecast', []) if se_nf_weather_hourly is defined else [] %}
+            {% set target_day = (now() + timedelta(days=1)).strftime('%Y-%m-%d') %}
+            {% set ns = namespace(sum=0, cnt=0) %}
+
+            {% for item in fc %}
+              {% set ts = as_timestamp(item.datetime | default('', true), 0) | int(0) %}
+              {% if ts > 0 %}
+                {% set d = ts | timestamp_custom('%Y-%m-%d', true) %}
+                {% set h = ts | timestamp_custom('%H', true) | int(0) %}
+
+                {% if d == target_day and h >= 11 and h <= 14 %}
+                  {% set cond = item.condition | default('', true) | lower %}
+
+                  {% if item.cloud_coverage is defined and item.cloud_coverage is not none %}
+                    {% set cloud = item.cloud_coverage | float(0) %}
+                    {% if cloud <= 20 %}
+                      {% set cf = 1.00 %}
+                    {% elif cloud <= 50 %}
+                      {% set cf = 0.92 %}
+                    {% elif cloud <= 75 %}
+                      {% set cf = 0.82 %}
+                    {% else %}
+                      {% set cf = 0.68 %}
+                    {% endif %}
+                  {% else %}
+                    {% if cond in ['sunny', 'clear-night'] or 'sonnig' in cond or 'klar' in cond %}
+                      {% set cf = 1.00 %}
+                    {% elif cond in ['partlycloudy', 'partly-cloudy'] or 'partly' in cond or 'heiter' in cond or 'leicht' in cond %}
+                      {% set cf = 0.90 %}
+                    {% elif cond in ['cloudy'] or 'cloud' in cond or 'bewölkt' in cond or 'bedeckt' in cond or 'overcast' in cond %}
+                      {% set cf = 0.75 %}
+                    {% elif cond in ['fog'] or 'fog' in cond or 'nebel' in cond %}
+                      {% set cf = 0.70 %}
+                    {% elif cond in ['rainy', 'pouring'] or 'rain' in cond or 'regen' in cond or 'schauer' in cond %}
+                      {% set cf = 0.62 %}
+                    {% elif cond in ['lightning', 'lightning-rainy'] or 'thunder' in cond or 'gewitter' in cond %}
+                      {% set cf = 0.55 %}
+                    {% elif cond in ['snowy', 'snowy-rainy'] or 'snow' in cond or 'schnee' in cond %}
+                      {% set cf = 0.60 %}
+                    {% else %}
+                      {% set cf = states('input_number.se_nf_weather_missing_forecast_factor') | float(0.85) %}
+                    {% endif %}
+                  {% endif %}
+
+                  {% if item.precipitation_probability is defined and item.precipitation_probability is not none %}
+                    {% set p = item.precipitation_probability | float(0) %}
+                    {% if p < 20 %}
+                      {% set rf = 1.00 %}
+                    {% elif p < 40 %}
+                      {% set rf = 0.94 %}
+                    {% elif p < 60 %}
+                      {% set rf = 0.84 %}
+                    {% elif p < 80 %}
+                      {% set rf = 0.74 %}
+                    {% else %}
+                      {% set rf = 0.64 %}
+                    {% endif %}
+                  {% else %}
+                    {% set precip = item.precipitation | default(0) | float(0) %}
+                    {% if precip > 1.0 %}
+                      {% set rf = 0.68 %}
+                    {% elif precip > 0.2 %}
+                      {% set rf = 0.82 %}
+                    {% elif 'rain' in cond or 'regen' in cond or 'schauer' in cond %}
+                      {% set rf = 0.76 %}
+                    {% elif 'thunder' in cond or 'gewitter' in cond or 'lightning' in cond %}
+                      {% set rf = 0.62 %}
+                    {% else %}
+                      {% set rf = 1.00 %}
+                    {% endif %}
+                  {% endif %}
+
+                  {% set factor = ((cf * 0.70) + (rf * 0.30)) %}
+                  {% set ns.sum = ns.sum + factor %}
+                  {% set ns.cnt = ns.cnt + 1 %}
+                {% endif %}
+              {% endif %}
+            {% endfor %}
+
+            {% if ns.cnt > 0 %}
+              {{ [[ns.sum / ns.cnt, 0.55] | max, 1.00] | min | round(2) }}
+            {% else %}
+              {# Kein Stundenforecast passend gefunden:
+                 nicht mehr blind 1.00, sondern current condition oder konservativer Fallback. #}
+              {% set curr = states(ent) | lower %}
+              {% if curr in ['sunny', 'clear-night'] or 'sonnig' in curr or 'klar' in curr %}
+                1.00
+              {% elif curr in ['partlycloudy', 'partly-cloudy'] or 'partly' in curr or 'heiter' in curr or 'leicht' in curr %}
+                0.90
+              {% elif curr in ['cloudy'] or 'cloud' in curr or 'bewölkt' in curr or 'bedeckt' in curr or 'overcast' in curr %}
+                0.75
+              {% elif curr in ['fog'] or 'fog' in curr or 'nebel' in curr %}
+                0.70
+              {% elif curr in ['rainy', 'pouring'] or 'rain' in curr or 'regen' in curr or 'schauer' in curr %}
+                0.62
+              {% elif curr in ['lightning', 'lightning-rainy'] or 'thunder' in curr or 'gewitter' in curr %}
+                0.55
+              {% elif curr in ['snowy', 'snowy-rainy'] or 'snow' in curr or 'schnee' in curr %}
+                0.60
+              {% else %}
+                {{ states('input_number.se_nf_weather_missing_forecast_factor') | float(0.85) | round(2) }}
+              {% endif %}
+            {% endif %}
+          {% endif %}
+        attributes:
+          period: "tomorrow_11_14"
+          note: "hourly forecast preferred; current weather/fallback if no matching hourly samples"
+      - name: "SE NF Weather Factor Tomorrow Afternoon"
+        unique_id: se_nf_weather_factor_tomorrow_afternoon
+        icon: mdi:weather-sunset-down
+        state: >-
+          {% if is_state('input_boolean.se_nf_weather_planning_enabled','off') %}
+            1.00
+          {% else %}
+            {% set ent = w_entity | trim %}
+            {% set fc = se_nf_weather_hourly.get(ent, {}).get('forecast', []) if se_nf_weather_hourly is defined else [] %}
+            {% set target_day = (now() + timedelta(days=1)).strftime('%Y-%m-%d') %}
+            {% set ns = namespace(sum=0, cnt=0) %}
+
+            {% for item in fc %}
+              {% set ts = as_timestamp(item.datetime | default('', true), 0) | int(0) %}
+              {% if ts > 0 %}
+                {% set d = ts | timestamp_custom('%Y-%m-%d', true) %}
+                {% set h = ts | timestamp_custom('%H', true) | int(0) %}
+
+                {% if d == target_day and h >= 15 and h <= 18 %}
+                  {% set cond = item.condition | default('', true) | lower %}
+
+                  {% if item.cloud_coverage is defined and item.cloud_coverage is not none %}
+                    {% set cloud = item.cloud_coverage | float(0) %}
+                    {% if cloud <= 20 %}
+                      {% set cf = 1.00 %}
+                    {% elif cloud <= 50 %}
+                      {% set cf = 0.92 %}
+                    {% elif cloud <= 75 %}
+                      {% set cf = 0.82 %}
+                    {% else %}
+                      {% set cf = 0.68 %}
+                    {% endif %}
+                  {% else %}
+                    {% if cond in ['sunny', 'clear-night'] or 'sonnig' in cond or 'klar' in cond %}
+                      {% set cf = 1.00 %}
+                    {% elif cond in ['partlycloudy', 'partly-cloudy'] or 'partly' in cond or 'heiter' in cond or 'leicht' in cond %}
+                      {% set cf = 0.90 %}
+                    {% elif cond in ['cloudy'] or 'cloud' in cond or 'bewölkt' in cond or 'bedeckt' in cond or 'overcast' in cond %}
+                      {% set cf = 0.75 %}
+                    {% elif cond in ['fog'] or 'fog' in cond or 'nebel' in cond %}
+                      {% set cf = 0.70 %}
+                    {% elif cond in ['rainy', 'pouring'] or 'rain' in cond or 'regen' in cond or 'schauer' in cond %}
+                      {% set cf = 0.62 %}
+                    {% elif cond in ['lightning', 'lightning-rainy'] or 'thunder' in cond or 'gewitter' in cond %}
+                      {% set cf = 0.55 %}
+                    {% elif cond in ['snowy', 'snowy-rainy'] or 'snow' in cond or 'schnee' in cond %}
+                      {% set cf = 0.60 %}
+                    {% else %}
+                      {% set cf = states('input_number.se_nf_weather_missing_forecast_factor') | float(0.85) %}
+                    {% endif %}
+                  {% endif %}
+
+                  {% if item.precipitation_probability is defined and item.precipitation_probability is not none %}
+                    {% set p = item.precipitation_probability | float(0) %}
+                    {% if p < 20 %}
+                      {% set rf = 1.00 %}
+                    {% elif p < 40 %}
+                      {% set rf = 0.94 %}
+                    {% elif p < 60 %}
+                      {% set rf = 0.84 %}
+                    {% elif p < 80 %}
+                      {% set rf = 0.74 %}
+                    {% else %}
+                      {% set rf = 0.64 %}
+                    {% endif %}
+                  {% else %}
+                    {% set precip = item.precipitation | default(0) | float(0) %}
+                    {% if precip > 1.0 %}
+                      {% set rf = 0.68 %}
+                    {% elif precip > 0.2 %}
+                      {% set rf = 0.82 %}
+                    {% elif 'rain' in cond or 'regen' in cond or 'schauer' in cond %}
+                      {% set rf = 0.76 %}
+                    {% elif 'thunder' in cond or 'gewitter' in cond or 'lightning' in cond %}
+                      {% set rf = 0.62 %}
+                    {% else %}
+                      {% set rf = 1.00 %}
+                    {% endif %}
+                  {% endif %}
+
+                  {% set factor = ((cf * 0.70) + (rf * 0.30)) %}
+                  {% set ns.sum = ns.sum + factor %}
+                  {% set ns.cnt = ns.cnt + 1 %}
+                {% endif %}
+              {% endif %}
+            {% endfor %}
+
+            {% if ns.cnt > 0 %}
+              {{ [[ns.sum / ns.cnt, 0.55] | max, 1.00] | min | round(2) }}
+            {% else %}
+              {# Kein Stundenforecast passend gefunden:
+                 nicht mehr blind 1.00, sondern current condition oder konservativer Fallback. #}
+              {% set curr = states(ent) | lower %}
+              {% if curr in ['sunny', 'clear-night'] or 'sonnig' in curr or 'klar' in curr %}
+                1.00
+              {% elif curr in ['partlycloudy', 'partly-cloudy'] or 'partly' in curr or 'heiter' in curr or 'leicht' in curr %}
+                0.90
+              {% elif curr in ['cloudy'] or 'cloud' in curr or 'bewölkt' in curr or 'bedeckt' in curr or 'overcast' in curr %}
+                0.75
+              {% elif curr in ['fog'] or 'fog' in curr or 'nebel' in curr %}
+                0.70
+              {% elif curr in ['rainy', 'pouring'] or 'rain' in curr or 'regen' in curr or 'schauer' in curr %}
+                0.62
+              {% elif curr in ['lightning', 'lightning-rainy'] or 'thunder' in curr or 'gewitter' in curr %}
+                0.55
+              {% elif curr in ['snowy', 'snowy-rainy'] or 'snow' in curr or 'schnee' in curr %}
+                0.60
+              {% else %}
+                {{ states('input_number.se_nf_weather_missing_forecast_factor') | float(0.85) | round(2) }}
+              {% endif %}
+            {% endif %}
+          {% endif %}
+        attributes:
+          period: "tomorrow_15_18"
+          note: "hourly forecast preferred; current weather/fallback if no matching hourly samples"
+  - sensor:
+      - name: "Speichermanagement Version"
+        unique_id: se_nf_package_version
+        icon: mdi:package-variant
+        state: "2.9.2a-smart-speicher"
+
+      - name: "SE NF Weather Entity Resolved"
+        unique_id: se_nf_weather_entity_resolved
+        icon: mdi:weather-partly-cloudy
+        state: >-
+          {% set cfg = states('input_text.se_nf_weather_entity') | trim %}
+          {% if cfg and states(cfg) not in ['unknown','unavailable','none',''] %}
+            {{ cfg }}
+          {% else %}
+            {% set ws = states.weather | list %}
+            {% if ws | count > 0 %}
+              {{ ws[0].entity_id }}
+            {% else %}
+              unknown
+            {% endif %}
+          {% endif %}
+
+      - name: "SE NF Charge Limit Entity Resolved"
+        unique_id: se_nf_charge_limit_entity_resolved
+        icon: mdi:lightning-bolt
+        state: "{{ states('input_text.se_nf_charge_limit_entity') | trim }}"
+        attributes:
+          configured_entity: "{{ states('input_text.se_nf_charge_limit_entity') | trim }}"
+          note: "V3.0-rc3: Writer-Ziel wird über input_text.se_nf_charge_limit_entity konfiguriert."
+      - name: "SE NF Charge Limit Actual"
+        unique_id: se_nf_charge_limit_actual
+        unit_of_measurement: "W"
+        device_class: power
+        state_class: measurement
+        icon: mdi:lightning-bolt
+        state: >-
+          {% set e = states('input_text.se_nf_charge_limit_entity') | trim %}
+          {% if states(e) not in ['unknown','unavailable','none',''] %}
+            {{ states(e) | float(0) | round(0) }}
+          {% else %}
+            unavailable
+          {% endif %}
+        attributes:
+          source_entity: "{{ states('input_text.se_nf_charge_limit_entity') | trim }}"
+          configured_entity: "{{ states('input_text.se_nf_charge_limit_entity') | trim }}"
+      - name: "SE NF Battery SoE"
+        unique_id: se_nf_battery_soe
+        unit_of_measurement: "%"
+        icon: mdi:battery-heart
+        state: >-
+          {% set e = states('input_text.se_nf_battery_soe_entity') | trim %}
+          {% if e and states(e) not in ['unknown','unavailable','none',''] %}
+            {{ [[states(e) | float(0), 0] | max, 100] | min | round(1) }}
+          {% else %}
+            unavailable
+          {% endif %}
+
+      - name: "SE NF Backup Reserve Pct"
+        unique_id: se_nf_backup_reserve_pct
+        unit_of_measurement: "%"
+        icon: mdi:battery-lock
+        state: >-
+          {% set e = states('input_text.se_nf_backup_reserve_entity') | trim %}
+          {% if e and states(e) not in ['unknown','unavailable','none',''] %}
+            {{ [[states(e) | float(0), 0] | max, 100] | min | round(1) }}
+          {% else %}
+            0
+          {% endif %}
+
+      - name: "SE NF Battery Capacity kWh"
+        unique_id: se_nf_battery_capacity_kwh
+        unit_of_measurement: "kWh"
+        device_class: energy
+        icon: mdi:battery
+        state: >-
+          {% set e = states('input_text.se_nf_battery_capacity_entity') | trim %}
+          {% set raw = states(e) if e else 'unknown' %}
+          {% set fallback = states('input_number.se_nf_battery_capacity_kwh_fallback') | float(0) %}
+          {% if raw not in ['unknown','unavailable','none',''] and (raw | float(0)) > 0 %}
+            {% set v = raw | float(0) %}
+            {% if v > 100 %}
+              {{ (v / 1000) | round(2) }}
+            {% else %}
+              {{ v | round(2) }}
+            {% endif %}
+          {% elif fallback > 0 %}
+            {{ fallback | round(2) }}
+          {% else %}
+            unavailable
+          {% endif %}
+
+      - name: "SE NF Optimization Mode Effective"
+        unique_id: se_nf_optimization_mode_effective
+        icon: mdi:tune-variant
+        state: >-
+          {% set mode = states('input_select.se_nf_optimization_mode') %}
+          {% if mode in ['Eigenverbrauch maximieren','Netzdienlich laden','Akku schonen'] %}
+            {{ mode }}
+          {% else %}
+            Netzdienlich laden
+          {% endif %}
+
+      - name: "SE NF Mode Min Start Hour"
+        unique_id: se_nf_mode_min_start_hour
+        icon: mdi:clock-start
+        unit_of_measurement: "h"
+        state: >-
+          {% if is_state('sensor.se_nf_optimization_mode_effective','Akku schonen') %}
+            {{ states('input_number.se_nf_lifetime_min_start_hour') | float(14.25) | round(2) }}
+          {% else %}
+            {{ states('input_number.se_nf_min_start_hour') | float(11.75) | round(2) }}
+          {% endif %}
+
+      - name: "SE NF Mode Latest Finish Hour"
+        unique_id: se_nf_mode_latest_finish_hour
+        icon: mdi:clock-end
+        unit_of_measurement: "h"
+        state: >-
+          {% if is_state('sensor.se_nf_optimization_mode_effective','Akku schonen') %}
+            {{ states('input_number.se_nf_lifetime_latest_finish_hour') | float(18.5) | round(2) }}
+          {% else %}
+            {{ states('input_number.se_nf_latest_finish_hour') | float(17.5) | round(2) }}
+          {% endif %}
+
+      - name: "SE NF Mode Start Safety Buffer Min"
+        unique_id: se_nf_mode_start_safety_buffer_min
+        icon: mdi:clock-alert-outline
+        unit_of_measurement: "min"
+        state: >-
+          {% if is_state('sensor.se_nf_optimization_mode_effective','Akku schonen') %}
+            {{ states('input_number.se_nf_lifetime_start_safety_buffer_min') | float(15) | round(0) }}
+          {% else %}
+            {{ states('input_number.se_nf_start_safety_buffer_min') | float(30) | round(0) }}
+          {% endif %}
+
+      - name: "SE NF Lifetime Night Energy Forecast"
+        unique_id: se_nf_lifetime_night_energy_forecast
+        unit_of_measurement: "kWh"
+        device_class: energy
+        icon: mdi:weather-night
+        state: >-
+          {% set sql = states('sensor.se_nf_remaining_consumption_effective') %}
+          {% set fallback = states('input_number.se_nf_lifetime_night_fallback_kwh') | float(4.5) %}
+          {% if sql not in ['unknown','unavailable','none',''] and (sql | float(0)) > 0 %}
+            {{ [sql | float(0), fallback] | max | round(2) }}
+          {% else %}
+            {{ fallback | round(2) }}
+          {% endif %}
+
+      - name: "SE NF Effective Target SoC Pct"
+        unique_id: se_nf_effective_target_soc_pct
+        unit_of_measurement: "%"
+        icon: mdi:battery-sync
+        state: >-
+          {% set mode = states('sensor.se_nf_optimization_mode_effective') %}
+          {% set cap = states('sensor.se_nf_battery_capacity_kwh') | float(0) %}
+          {% set reserve = states('sensor.se_nf_backup_reserve_pct') | float(0) %}
+          {% if mode == 'Akku schonen' and cap > 0 %}
+            {% set night = states('sensor.se_nf_lifetime_night_energy_forecast') | float(states('input_number.se_nf_lifetime_night_fallback_kwh') | float(4.5)) %}
+            {% set safety = states('input_number.se_nf_lifetime_safety_kwh') | float(1.0) %}
+            {% set min_soc = states('input_number.se_nf_lifetime_min_soc_pct') | float(45) %}
+            {% set max_soc = states('input_number.se_nf_lifetime_max_soc_pct') | float(85) %}
+            {% set raw = reserve + ((night + safety) / cap * 100) %}
+            {{ [[raw, min_soc] | max, max_soc] | min | round(1) }}
+          {% else %}
+            {{ states('input_number.se_nf_target_soc_pct') | float(0) | round(1) }}
+          {% endif %}
+        attributes:
+          mode: "{{ states('sensor.se_nf_optimization_mode_effective') }}"
+          night_kwh: "{{ states('sensor.se_nf_lifetime_night_energy_forecast') }}"
+          note: "V2.9 : Lebensdauer-Modus berechnet Ziel-SoC aus Nachtbedarf + Reserve und deckelt bei Max-SoC."
+
+      - name: "SE NF Needed Energy"
+        unique_id: se_nf_needed_energy
+        unit_of_measurement: "kWh"
+        device_class: energy
+        icon: mdi:battery-plus-outline
+        state: >-
+          {% set cap = states('sensor.se_nf_battery_capacity_kwh') | float(0) %}
+          {% set soe = states('sensor.se_nf_battery_soe') | float(0) %}
+          {% set reserve = states('sensor.se_nf_backup_reserve_pct') | float(0) %}
+          {% set target = states('sensor.speicher_ziel_ladestand') | float(states('input_number.se_nf_target_soc_pct') | float(0)) %}
+          {% set effective_soe = [soe, reserve] | max %}
+          {% if cap <= 0 %}
+            0
+          {% else %}
+            {% set pct = [target - effective_soe, 0] | max %}
+            {{ (cap * pct / 100) | round(2) }}
+          {% endif %}
+
+      - name: "SE NF Remaining Consumption Manual Simple"
+        unique_id: se_nf_remaining_consumption_manual_simple
+        unit_of_measurement: "kWh"
+        device_class: energy
+        icon: mdi:home-lightning-bolt-outline
+        state: >-
+          {% set daily = states('input_number.se_nf_manual_daily_consumption_kwh') | float(8) %}
+          {% set h = now().hour + (now().minute / 60) %}
+          {% set remaining_fraction = [[(24 - h) / 24, 0] | max, 1] | min %}
+          {{ (daily * remaining_fraction) | round(2) }}
+
+      - name: "SE NF Load Forecast Remaining 7d"
+        unique_id: se_nf_load_forecast_remaining_7d
+        unit_of_measurement: "kWh"
+        device_class: energy
+        icon: mdi:chart-timeline-variant
+        state: >-
+          {% set v = states('sensor.se_nf_load_forecast_7d_cached') %}
+          {% set days = state_attr('sensor.se_nf_load_forecast_7d_cached','days') | int(0) %}
+          {% if v not in ['unknown','unavailable','none',''] and days >= 3 and (v | float(0)) > 0 %}
+            {{ [v | float(0), 0] | max | round(2) }}
+          {% else %}
+            0
+          {% endif %}
+        attributes:
+          valid: >-
+            {% set v = states('sensor.se_nf_load_forecast_7d_cached') %}
+            {% set days = state_attr('sensor.se_nf_load_forecast_7d_cached','days') | int(0) %}
+            {{ v not in ['unknown','unavailable','none',''] and days >= 3 and (v | float(0)) > 0 }}
+          days: "{{ state_attr('sensor.se_nf_load_forecast_7d_cached','days') }}"
+          samples_total: "{{ state_attr('sensor.se_nf_load_forecast_7d_cached','samples_total') }}"
+          min_remaining: "{{ state_attr('sensor.se_nf_load_forecast_7d_cached','min_remaining') }}"
+          max_remaining: "{{ state_attr('sensor.se_nf_load_forecast_7d_cached','max_remaining') }}"
+          avg_day_total: "{{ state_attr('sensor.se_nf_load_forecast_7d_cached','avg_day_total') }}"
+
+      - name: "SE NF Load Forecast Until Now 7d"
+        unique_id: se_nf_load_forecast_until_now_7d
+        unit_of_measurement: "kWh"
+        device_class: energy
+        icon: mdi:chart-timeline
+        state: >-
+          {% set v = state_attr('sensor.se_nf_load_forecast_7d_cached','until_now') %}
+          {% if v not in ['unknown','unavailable','none',''] and v is not none and (v | float(0)) > 0 %}
+            {{ [v | float(0), 0] | max | round(2) }}
+          {% else %}
+            0
+          {% endif %}
+        attributes:
+          valid: >-
+            {% set v = state_attr('sensor.se_nf_load_forecast_7d_cached','until_now') %}
+            {{ v not in ['unknown','unavailable','none',''] and v is not none and (v | float(0)) > 0 }}
+
+      - name: "SE NF Load Forecast Correction Factor"
+        unique_id: se_nf_load_forecast_correction_factor
+        icon: mdi:tune-vertical
+        state: >-
+          {% set expected = states('sensor.se_nf_load_forecast_until_now_7d') | float(0) %}
+          {% set bad = ['unknown','unavailable','none','None',''] %}
+            {% set actual_e = states('input_text.se_nf_daily_consumption_entity') | trim %}
+            {% set actual = states(actual_e) | float(0) if actual_e not in bad else 0 %}
+          {% set h = now().hour + (now().minute / 60) %}
+          {% if h < 8 or expected < 0.5 %}
+            1.00
+          {% else %}
+            {% set raw = actual / expected if expected > 0 else 1 %}
+            {{ [[raw, 0.75] | max, 1.35] | min | round(2) }}
+          {% endif %}
+        attributes:
+          actual_until_now: >-
+              {% set e = states('input_text.se_nf_daily_consumption_entity') | trim %}
+              {{ states(e) if e not in ['unknown','unavailable','none','None',''] else 'unknown' }}
+          expected_until_now_7d: "{{ states('sensor.se_nf_load_forecast_until_now_7d') }}"
+
+      - name: "SE NF Remaining Consumption Effective"
+        unique_id: se_nf_remaining_consumption_effective
+        unit_of_measurement: "kWh"
+        device_class: energy
+        icon: mdi:home-analytics
+        state: >-
+          {% set manual = states('sensor.se_nf_remaining_consumption_manual_simple') | float(0) %}
+          {% set hist_raw = states('sensor.se_nf_load_forecast_remaining_7d') %}
+          {% set corr = states('sensor.se_nf_load_forecast_correction_factor') | float(1) %}
+          {% set safety = states('input_number.se_nf_load_forecast_safety_factor') | float(1.05) %}
+          {% if hist_raw not in ['unknown','unavailable','none',''] and (hist_raw | float(0)) > 0 %}
+            {% set hist = hist_raw | float(0) * corr * safety %}
+            {{ [manual, hist] | max | round(2) }}
+          {% else %}
+            {{ manual | round(2) }}
+          {% endif %}
+        attributes:
+          manual_simple_kwh: "{{ states('sensor.se_nf_remaining_consumption_manual_simple') }}"
+          sql_remaining_7d_kwh: "{{ states('sensor.se_nf_load_forecast_remaining_7d') }}"
+          correction_factor: "{{ states('sensor.se_nf_load_forecast_correction_factor') }}"
+          safety_factor: "{{ states('input_number.se_nf_load_forecast_safety_factor') }}"
+          note: "V2.8.9a: effective = max(manual_simple, sql_7d * correction * safety)."
+
+      - name: "SE NF Remaining Consumption Today"
+        unique_id: se_nf_remaining_consumption_today
+        unit_of_measurement: "kWh"
+        device_class: energy
+        icon: mdi:home-lightning-bolt-outline
+        state: >-
+          {{ states('sensor.se_nf_remaining_consumption_effective') | float(states('sensor.se_nf_remaining_consumption_manual_simple') | float(0)) | round(2) }}
+        attributes:
+          source: "{{ states('sensor.se_nf_load_forecast_source') }}"
+          manual_simple_kwh: "{{ states('sensor.se_nf_remaining_consumption_manual_simple') }}"
+          effective_kwh: "{{ states('sensor.se_nf_remaining_consumption_effective') }}"
+
+      - name: "SE NF Load Forecast Source"
+        unique_id: se_nf_load_forecast_source
+        icon: mdi:database-search
+        state: >-
+          {% set hist = states('sensor.se_nf_load_forecast_remaining_7d') %}
+          {% if hist not in ['unknown','unavailable','none',''] and (hist | float(0)) > 0 %}
+            sql_7d_profile
+          {% else %}
+            manual_simple_v28
+          {% endif %}
+
+      - name: "SE NF Load Forecast Summary"
+        unique_id: se_nf_load_forecast_summary
+        icon: mdi:clipboard-pulse-outline
+        state: >-
+          {% set src = states('sensor.se_nf_load_forecast_source') %}
+          {% set eff = states('sensor.se_nf_remaining_consumption_effective') %}
+          {% set sql = states('sensor.se_nf_load_forecast_remaining_7d') %}
+          {% set manual = states('sensor.se_nf_remaining_consumption_manual_simple') %}
+          {% set corr = states('sensor.se_nf_load_forecast_correction_factor') %}
+          {% set days = state_attr('sensor.se_nf_load_forecast_7d_cached','days') | int(0) %}
+          Verbrauch {{ src }} · Rest effektiv {{ eff }} kWh · SQL {{ sql }} kWh · manuell {{ manual }} kWh · Faktor {{ corr }} · Tage {{ days }}
+
+      - name: "SE NF Remaining PV Today"
+        unique_id: se_nf_remaining_pv_today
+        unit_of_measurement: "kWh"
+        device_class: energy
+        icon: mdi:solar-power
+        state: >-
+          {% set e = states('input_text.se_nf_pv_today_remaining_entity') | trim %}
+          {% set bad = ['unknown', 'unavailable', 'none', 'None', ''] %}
+          {% if e not in bad %}
+            {% set raw = states(e) %}
+            {% if raw not in bad %}
+              {{ [raw | float(0), 0] | max | round(2) }}
+            {% else %}
+              0.0
+            {% endif %}
+          {% else %}
+            0.0
+          {% endif %}
+      - name: "SE NF PV Forecast Today Total"
+        unique_id: se_nf_pv_forecast_today_total
+        unit_of_measurement: "kWh"
+        device_class: energy
+        icon: mdi:solar-power-variant
+        state: >-
+          {% set e = states('input_text.se_nf_pv_today_total_entity') | trim %}
+          {% set bad = ['unknown', 'unavailable', 'none', 'None', ''] %}
+          {% if e not in bad %}
+            {% set raw = states(e) %}
+            {% if raw not in bad %}
+              {{ [raw | float(0), 0] | max | round(2) }}
+            {% else %}
+              0.0
+            {% endif %}
+          {% else %}
+            0.0
+          {% endif %}
+      - name: "SE NF PV Forecast Tomorrow"
+        unique_id: se_nf_pv_forecast_tomorrow
+        unit_of_measurement: "kWh"
+        device_class: energy
+        icon: mdi:weather-sunny
+        state: >-
+          {% set e = states('input_text.se_nf_pv_tomorrow_entity') | trim %}
+          {% set bad = ['unknown', 'unavailable', 'none', 'None', ''] %}
+          {% if e not in bad %}
+            {% set raw = states(e) %}
+            {% if raw not in bad %}
+              {{ [raw | float(0), 0] | max | round(2) }}
+            {% else %}
+              0.0
+            {% endif %}
+          {% else %}
+            0.0
+          {% endif %}
+      - name: "SE NF Weather Current Factor"
+        unique_id: se_nf_weather_current_factor
+        icon: mdi:weather-cloudy
+        state: >-
+          {% if is_state('input_boolean.se_nf_weather_planning_enabled','off') %}
+            1.00
+          {% else %}
+            {% set src = states('sensor.se_nf_weather_entity_resolved') %}
+            {% set curr = states(src) | lower if src not in ['unknown','unavailable','none',''] else 'unknown' %}
+            {% if curr in ['sunny', 'clear-night'] or 'sonnig' in curr or 'klar' in curr %}
+              1.00
+            {% elif curr in ['partlycloudy', 'partly-cloudy'] or 'partly' in curr or 'heiter' in curr or 'leicht' in curr %}
+              0.90
+            {% elif curr in ['cloudy'] or 'cloud' in curr or 'bewölkt' in curr or 'bedeckt' in curr or 'overcast' in curr %}
+              0.75
+            {% elif curr in ['fog'] or 'fog' in curr or 'nebel' in curr %}
+              0.70
+            {% elif curr in ['rainy', 'pouring'] or 'rain' in curr or 'regen' in curr or 'schauer' in curr %}
+              0.62
+            {% elif curr in ['lightning', 'lightning-rainy'] or 'thunder' in curr or 'gewitter' in curr %}
+              0.55
+            {% elif curr in ['snowy', 'snowy-rainy'] or 'snow' in curr or 'schnee' in curr %}
+              0.60
+            {% else %}
+              {{ states('input_number.se_nf_weather_missing_forecast_factor') | float(0.85) | round(2) }}
+            {% endif %}
+          {% endif %}
+        attributes:
+          weather_entity: "{{ states('sensor.se_nf_weather_entity_resolved') }}"
+          weather_state: >-
+            {% set src = states('sensor.se_nf_weather_entity_resolved') %}
+            {{ states(src) if src not in ['unknown','unavailable','none',''] else 'unknown' }}
+
+      - name: "SE NF Weather Planning Factor Today"
+        unique_id: se_nf_weather_planning_factor_today
+        icon: mdi:weather-partly-cloudy
+        state: >-
+          {% if is_state('input_boolean.se_nf_weather_planning_enabled','off') %}
+            1.00
+          {% else %}
+            {% set h = now().hour + (now().minute / 60) %}
+            {% set m = states('sensor.se_nf_weather_factor_today_morning') | float(1) %}
+            {% set d = states('sensor.se_nf_weather_factor_today_midday') | float(1) %}
+            {% set a = states('sensor.se_nf_weather_factor_today_afternoon') | float(1) %}
+            {% set curr = states('sensor.se_nf_weather_current_factor') | float(1) %}
+            {% set w = states('input_number.se_nf_weather_current_weight_pct') | float(40) / 100 %}
+
+            {% if h < 10 %}
+              {% set base = ((m * 0.20) + (d * 0.35) + (a * 0.45)) %}
+            {% elif h < 14 %}
+              {% set base = ((d * 0.45) + (a * 0.55)) %}
+            {% elif h < 19 %}
+              {% set base = a %}
+            {% else %}
+              {% set base = 1.00 %}
+            {% endif %}
+
+            {# Current Weather Cap:
+               Aktueller Zustand darf Prognose nicht verbessern.
+               Wenn die konfigurierte Weather-Entity cloudy ist, wird aus 1.00 nicht mehr 1.00,
+               sondern konservativ reduziert.
+            #}
+            {% set blended = (base * (1 - w)) + (curr * w) %}
+            {% set final = [base, blended] | min %}
+            {{ [[final, 0.55] | max, 1.00] | min | round(2) }}
+          {% endif %}
+      - name: "SE NF Weather Planning Factor Tomorrow"
+        unique_id: se_nf_weather_planning_factor_tomorrow
+        icon: mdi:weather-partly-cloudy
+        state: >-
+          {% if is_state('input_boolean.se_nf_weather_planning_enabled','off') %}
+            1.00
+          {% else %}
+            {% set m = states('sensor.se_nf_weather_factor_tomorrow_morning') | float(1) %}
+            {% set d = states('sensor.se_nf_weather_factor_tomorrow_midday') | float(1) %}
+            {% set a = states('sensor.se_nf_weather_factor_tomorrow_afternoon') | float(1) %}
+            {{ ((m * 0.20) + (d * 0.35) + (a * 0.45)) | round(2) }}
+          {% endif %}
+
+      - name: "SE NF Weather Lead Minutes"
+        unique_id: se_nf_weather_lead_minutes
+        unit_of_measurement: "min"
+        icon: mdi:weather-cloudy-clock
+        state: >-
+          {% if is_state('input_boolean.se_nf_weather_planning_enabled','off') %}
+            0
+          {% else %}
+            {% set final = states('sensor.se_nf_weather_planning_factor_today') | float(1) %}
+            {% set mid = states('sensor.se_nf_weather_factor_today_midday') | float(1) %}
+            {% set aft = states('sensor.se_nf_weather_factor_today_afternoon') | float(1) %}
+            {% set curr = states('sensor.se_nf_weather_current_factor') | float(1) %}
+            {% set maxlead = states('input_number.se_nf_weather_max_lead_min') | int(90) %}
+
+            {# V2.9.4c: Startzeit-Vorzug nutzt finalen Wetter-Planungsfaktor #}
+            {% if aft < 0.70 or curr < 0.65 or final < 0.68 %}
+              {{ maxlead }}
+            {% elif final < 0.78 %}
+              {{ [60, maxlead] | min }}
+            {% elif final < 0.84 %}
+              {{ [45, maxlead] | min }}
+            {% elif final < 0.90 %}
+              {{ [30, maxlead] | min }}
+            {% else %}
+              0
+            {% endif %}
+          {% endif %}
+      - name: "SE NF Weather Lead Minutes Tomorrow"
+        unique_id: se_nf_weather_lead_minutes_tomorrow
+        unit_of_measurement: "min"
+        icon: mdi:weather-cloudy-clock
+        state: >-
+          {% if is_state('input_boolean.se_nf_weather_planning_enabled','off') %}
+            0
+          {% else %}
+            {% set mid = states('sensor.se_nf_weather_factor_tomorrow_midday') | float(1) %}
+            {% set aft = states('sensor.se_nf_weather_factor_tomorrow_afternoon') | float(1) %}
+            {% set maxlead = states('input_number.se_nf_weather_max_lead_min') | int(90) %}
+            {% if aft < 0.70 %}
+              {{ maxlead }}
+            {% elif aft < 0.80 %}
+              {{ [60, maxlead] | min }}
+            {% elif mid < 0.75 %}
+              {{ [45, maxlead] | min }}
+            {% elif mid < 0.85 or aft < 0.88 %}
+              {{ [30, maxlead] | min }}
+            {% else %}
+              0
+            {% endif %}
+          {% endif %}
+
+      - name: "SE NF Remaining PV Today Weather Adjusted"
+        unique_id: se_nf_remaining_pv_today_weather_adjusted
+        unit_of_measurement: "kWh"
+        device_class: energy
+        icon: mdi:weather-sunny-alert
+        state: >-
+          {% set pv = states('sensor.se_nf_remaining_pv_today') | float(0) %}
+          {% set f = states('sensor.se_nf_weather_planning_factor_today') | float(1) %}
+          {{ [pv * f, 0] | max | round(2) }}
+
+      - name: "SE NF PV Forecast Tomorrow Weather Adjusted"
+        unique_id: se_nf_pv_forecast_tomorrow_weather_adjusted
+        unit_of_measurement: "kWh"
+        device_class: energy
+        icon: mdi:weather-sunny-alert
+        state: >-
+          {% set pv = states('sensor.se_nf_pv_forecast_tomorrow') | float(0) %}
+          {% set f = states('sensor.se_nf_weather_planning_factor_tomorrow') | float(1) %}
+          {{ [pv * f, 0] | max | round(2) }}
+
+      - name: "SE NF Weather Planning Summary"
+        unique_id: se_nf_weather_planning_summary
+        icon: mdi:weather-partly-cloudy
+        state: >-
+          {% set src = states('sensor.se_nf_weather_entity_resolved') %}
+          {% set curr_state = states(src) if src not in ['unknown','unavailable','none',''] else 'unknown' %}
+          {% set curr_factor = states('sensor.se_nf_weather_current_factor') %}
+          {% set tm = states('sensor.se_nf_weather_factor_today_morning') %}
+          {% set td = states('sensor.se_nf_weather_factor_today_midday') %}
+          {% set ta = states('sensor.se_nf_weather_factor_today_afternoon') %}
+          {% set final = states('sensor.se_nf_weather_planning_factor_today') %}
+          {% set lead = states('sensor.se_nf_weather_lead_minutes') %}
+          Wetter {{ src }}={{ curr_state }} Faktor {{ curr_factor }} · früh {{ tm }} · mittag {{ td }} · nachmittag {{ ta }} · final {{ final }} · Vorzug {{ lead }} min
+      - name: "SE NF Available PV For Battery Today"
+        unique_id: se_nf_available_pv_for_battery_today
+        unit_of_measurement: "kWh"
+        device_class: energy
+        icon: mdi:battery-solar
+        state: >-
+          {% set pv = states('sensor.se_nf_remaining_pv_today_weather_adjusted') | float(states('sensor.se_nf_remaining_pv_today') | float(0)) %}
+          {% set cons = states('sensor.se_nf_remaining_consumption_today') | float(0) %}
+          {{ [pv - cons, 0] | max | round(2) }}
+      - name: "SE NF Coverage Ratio"
+        unique_id: se_nf_coverage_ratio
+        icon: mdi:chart-pie
+        state: >-
+          {% set avail = states('sensor.se_nf_available_pv_for_battery_today') | float(0) %}
+          {% set need = states('sensor.se_nf_needed_energy') | float(0) %}
+          {% if need <= 0.05 %}
+            99
+          {% else %}
+            {{ (avail / need) | round(2) }}
+          {% endif %}
+
+      - name: "SE NF Load Coverage Lead Minutes"
+        unique_id: se_nf_load_coverage_lead_minutes
+        unit_of_measurement: "min"
+        icon: mdi:clock-fast
+        state: >-
+          {% set need = states('sensor.se_nf_needed_energy') | float(0) %}
+          {% set cov = states('sensor.se_nf_coverage_ratio') | float(0) %}
+          {% set maxlead = states('input_number.se_nf_coverage_lead_max_min') | int(120) %}
+          {% if need <= 0.05 or maxlead <= 0 %}
+            0
+          {% elif cov < 0.50 %}
+            {{ maxlead }}
+          {% elif cov < 0.80 %}
+            {{ [90, maxlead] | min }}
+          {% elif cov < 1.00 %}
+            {{ [60, maxlead] | min }}
+          {% elif cov < 1.25 %}
+            {{ [30, maxlead] | min }}
+          {% else %}
+            0
+          {% endif %}
+        attributes:
+          coverage_ratio: "{{ states('sensor.se_nf_coverage_ratio') }}"
+          available_pv_for_battery_today: "{{ states('sensor.se_nf_available_pv_for_battery_today') }}"
+          needed_energy: "{{ states('sensor.se_nf_needed_energy') }}"
+          note: "V2.8.9a: Vorzug nur vor OPEN; nach OPEN wird nicht neu geschlossen."
+
+      - name: "SE NF Today End Timestamp"
+        unique_id: se_nf_today_end_timestamp
+        icon: mdi:clock-end
+        state: >-
+          {% set latest = states('sensor.se_nf_mode_latest_finish_hour') | float(17.5) %}
+          {% set h = latest | int(0) %}
+          {% set m = ((latest - h) * 60) | round(0) | int(0) %}
+          {{ as_timestamp(today_at('%02d:%02d:00' | format(h, m)), 0) | int(0) }}
+
+      - name: "SE NF Today End With Grace Timestamp"
+        unique_id: se_nf_today_end_with_grace_timestamp
+        icon: mdi:clock-end
+        state: >-
+          {% set end_ts = states('sensor.se_nf_today_end_timestamp') | int(0) %}
+          {% set grace = states('input_number.se_nf_session_end_grace_min') | int(30) %}
+          {{ end_ts + (grace * 60) if end_ts > 0 else 0 }}
+
+      - name: "SE NF Required Charge Minutes"
+        unique_id: se_nf_required_charge_minutes
+        unit_of_measurement: "min"
+        icon: mdi:timer-plus
+        state: >-
+          {% set need = states('sensor.se_nf_needed_energy') | float(0) %}
+          {% set power = states('input_number.se_nf_planning_charge_power_w') | float(3500) %}
+          {% if need <= 0.05 or power <= 0 %}
+            0
+          {% else %}
+            {{ (((need / (power / 1000)) * 60) | round(0, 'ceil') | int(0)) }}
+          {% endif %}
+
+      - name: "SE NF Today Planned Start Candidate Timestamp"
+        unique_id: se_nf_today_planned_start_candidate_timestamp
+        icon: mdi:clock-start
+        state: >-
+          {% set need = states('sensor.se_nf_needed_energy') | float(0) %}
+          {% set end_ts = states('sensor.se_nf_today_end_timestamp') | int(0) %}
+          {% set req = states('sensor.se_nf_required_charge_minutes') | int(0) %}
+          {% set buffer = states('sensor.se_nf_mode_start_safety_buffer_min') | int(30) %}
+          {% set weather_lead = states('sensor.se_nf_weather_lead_minutes') | int(0) %}
+          {% set load_lead = states('sensor.se_nf_load_coverage_lead_minutes') | int(0) %}
+          {% set adaptive_lead = states('sensor.se_nf_adaptive_forecast_bias_minutes') | int(0) %}
+          {% set live_gap_lead = states('sensor.se_nf_live_forecast_gap_lead_minutes') | int(0) %}
+          {% set min_hour = states('sensor.se_nf_mode_min_start_hour') | float(11.75) %}
+          {% set min_h = min_hour | int(0) %}
+          {% set min_m = ((min_hour - min_h) * 60) | round(0) | int(0) %}
+          {% set min_ts = as_timestamp(today_at('%02d:%02d:00' | format(min_h, min_m)), 0) | int(0) %}
+          {% if need <= 0.05 or end_ts <= 0 %}
+            0
+          {% else %}
+            {% set raw = end_ts - ((req + buffer + weather_lead + load_lead + adaptive_lead + live_gap_lead) * 60) %}
+            {{ [raw, min_ts] | max | int(0) }}
+          {% endif %}
+      - name: "SE NF Tomorrow Planned Start Timestamp"
+        unique_id: se_nf_tomorrow_planned_start_timestamp
+        icon: mdi:clock-start
+        state: >-
+          {% set need = states('sensor.se_nf_needed_energy') | float(0) %}
+          {% set power = states('input_number.se_nf_planning_charge_power_w') | float(3500) %}
+          {% set req = ((need / (power / 1000)) * 60) | round(0, 'ceil') | int(0) if need > 0.05 and power > 0 else 0 %}
+          {% set buffer = states('sensor.se_nf_mode_start_safety_buffer_min') | int(30) %}
+          {% set weather_lead = states('sensor.se_nf_weather_lead_minutes_tomorrow') | int(0) %}
+          {% set latest = states('sensor.se_nf_mode_latest_finish_hour') | float(17.5) %}
+          {% set h = latest | int(0) %}
+          {% set m = ((latest - h) * 60) | round(0) | int(0) %}
+          {% set end_ts = as_timestamp((today_at('%02d:%02d:00' | format(h, m)) + timedelta(days=1)), 0) | int(0) %}
+          {% set min_hour = states('sensor.se_nf_mode_min_start_hour') | float(11.75) %}
+          {% set min_h = min_hour | int(0) %}
+          {% set min_m = ((min_hour - min_h) * 60) | round(0) | int(0) %}
+          {% set min_ts = as_timestamp((today_at('%02d:%02d:00' | format(min_h, min_m)) + timedelta(days=1)), 0) | int(0) %}
+          {% if need <= 0.05 or end_ts <= 0 %}
+            0
+          {% else %}
+            {% set raw = end_ts - ((req + buffer + weather_lead) * 60) %}
+            {{ [raw, min_ts] | max | int(0) }}
+          {% endif %}
+      - name: "SE NF Active Planned Start Timestamp"
+        unique_id: se_nf_active_planned_start_timestamp
+        icon: mdi:clock-start
+        state: >-
+          {% set planned_ts = as_timestamp(states('input_datetime.se_nf_session_planned_start'), 0) | int(0) %}
+          {% set candidate_ts = states('sensor.se_nf_today_planned_start_candidate_timestamp') | int(0) %}
+          {% set min_hour = states('sensor.se_nf_mode_min_start_hour') | float(11.75) %}
+          {% set min_h = min_hour | int(0) %}
+          {% set min_m = ((min_hour - min_h) * 60) | round(0) | int(0) %}
+          {% set min_ts = as_timestamp(today_at('%02d:%02d:00' | format(min_h, min_m)), 0) | int(0) %}
+          {% set end_grace_ts = states('sensor.se_nf_today_end_with_grace_timestamp') | int(0) %}
+          {% set day_start_ts = as_timestamp(today_at('06:00:00'), 0) | int(0) %}
+          {% set need = states('sensor.se_nf_needed_energy') | float(0) %}
+          {% set pv_for_akku = states('sensor.se_nf_available_pv_for_battery_today') | float(99) %}
+          {% set margin = states('sensor.se_nf_live_battery_pv_margin') | float(99) %}
+          {% set remaining = states('sensor.se_nf_remaining_pv_today') | float(0) %}
+          {% set forecast_now = states('sensor.se_nf_live_pv_forecast_now') | float(0) %}
+          {% set critical_latched_today = is_state('input_boolean.se_nf_critical_deficit_latched_today','on') %}
+          {% set critical_planned_valid =
+             critical_latched_today
+             and planned_ts > 0
+             and planned_ts >= day_start_ts
+             and planned_ts <= end_grace_ts
+             and is_state('sensor.se_nf_sanity_check','ok')
+             and is_state('sensor.se_nf_config_check','ok')
+             and is_state('binary_sensor.se_nf_risk_flag','off') %}
+          {% set planned_valid = (planned_ts >= min_ts and planned_ts <= end_grace_ts) or critical_planned_valid %}
+          {% if planned_valid %}
+            {{ planned_ts }}
+          {% else %}
+            {{ candidate_ts }}
+          {% endif %}
+
+      - name: "SE NF Today Charge Window"
+        unique_id: se_nf_today_charge_window
+        icon: mdi:calendar-today
+        state: >-
+          {% set start_ts = states('sensor.se_nf_active_planned_start_timestamp') | int(0) %}
+          {% set end_ts = states('sensor.se_nf_today_end_timestamp') | int(0) %}
+          {% set need = states('sensor.se_nf_needed_energy') | float(0) %}
+          {% set avail = states('sensor.se_nf_available_pv_for_battery_today') | float(0) %}
+          {% if need <= 0.05 %}
+            Heute keine Ladung nötig · Akku voll
+          {% elif start_ts <= 0 or end_ts <= 0 %}
+            Heute kein gültiges Ladefenster
+          {% else %}
+            Heute · {{ start_ts | timestamp_custom('%H:%M', true) }}–{{ end_ts | timestamp_custom('%H:%M', true) }} · Bedarf {{ need }} kWh · PV-Puffer {{ (avail - need) | round(2) }} kWh · Verbrauchs-Vorzug {{ states('sensor.se_nf_load_coverage_lead_minutes') }} min · {{ states('sensor.se_nf_weather_planning_summary') }}
+          {% endif %}
+
+      - name: "SE NF Tomorrow Charge Window"
+        unique_id: se_nf_tomorrow_charge_window
+        icon: mdi:calendar-tomorrow
+        state: >-
+          {% set start_ts = states('sensor.se_nf_tomorrow_planned_start_timestamp') | int(0) %}
+          {% set need = states('sensor.se_nf_needed_energy') | float(0) %}
+          {% set pv = states('sensor.se_nf_pv_forecast_tomorrow_weather_adjusted') | float(states('sensor.se_nf_pv_forecast_tomorrow') | float(0)) %}
+          {% set daily = states('input_number.se_nf_manual_daily_consumption_kwh') | float(8) %}
+          {% set avail = [pv - daily, 0] | max %}
+          {% set latest = states('sensor.se_nf_mode_latest_finish_hour') | float(17.5) %}
+          {% set h = latest | int(0) %}
+          {% set m = ((latest - h) * 60) | round(0) | int(0) %}
+          {% set end_ts = as_timestamp((today_at('%02d:%02d:00' | format(h, m)) + timedelta(days=1)), 0) | int(0) %}
+          {% if need <= 0.05 %}
+            Morgen aktuell keine Ladung nötig · Akku voll
+          {% elif start_ts <= 0 %}
+            Morgen kein gültiges Ladefenster
+          {% else %}
+            Morgen · {{ start_ts | timestamp_custom('%H:%M', true) }}–{{ end_ts | timestamp_custom('%H:%M', true) }} · Bedarf {{ need }} kWh · Wetter-PV {{ pv }} kWh · PV-Puffer {{ (avail - need) | round(2) }} kWh
+          {% endif %}
+      - name: "SE NF Next Charge Window"
+        unique_id: se_nf_next_charge_window
+        icon: mdi:calendar-clock
+        state: >-
+          {% set now_ts = now().timestamp() | int(0) %}
+          {% set end_grace = states('sensor.se_nf_today_end_with_grace_timestamp') | int(0) %}
+          {% if end_grace > 0 and now_ts > end_grace %}
+            {{ states('sensor.se_nf_tomorrow_charge_window') }}
+          {% else %}
+            {{ states('sensor.se_nf_today_charge_window') }}
+          {% endif %}
+
+      - name: "SE NF Next Charge Window Day"
+        unique_id: se_nf_next_charge_window_day
+        icon: mdi:calendar-question
+        state: >-
+          {% set now_ts = now().timestamp() | int(0) %}
+          {% set end_grace = states('sensor.se_nf_today_end_with_grace_timestamp') | int(0) %}
+          {% if end_grace > 0 and now_ts > end_grace %}
+            tomorrow
+          {% else %}
+            today
+          {% endif %}
+
+      - name: "SE NF Config Check"
+        unique_id: se_nf_config_check
+        icon: mdi:check-network-outline
+        state: >-
+          {% set charge = states('input_text.se_nf_charge_limit_entity') | trim %}
+          {% set charge_expected = states('input_text.se_nf_charge_limit_entity') | trim %}
+          {% set pv_today = states('input_text.se_nf_pv_today_remaining_entity') | trim %}
+          {% set pv_tom = states('input_text.se_nf_pv_tomorrow_entity') | trim %}
+          {% set soe = states('input_text.se_nf_battery_soe_entity') | trim %}
+          {% set cap = states('sensor.se_nf_battery_capacity_kwh') %}
+          {% set soe_age = states('sensor.se_nf_soe_age_s') | int(0) %}
+          {% set limit_age = states('sensor.se_nf_charge_limit_age_s') | int(0) %}
+          {% set max_age = states('input_number.se_nf_max_sensor_age_s') | int(14400) %}
+          {% if charge != charge_expected %}
+            charge_limit_entity_not_allowed
+          {% elif states(charge_expected) in ['unknown','unavailable','none',''] %}
+            charge_limit_entity_missing
+          {% elif not pv_today or states(pv_today) in ['unknown','unavailable','none',''] %}
+            pv_today_remaining_missing
+          {% elif not pv_tom or states(pv_tom) in ['unknown','unavailable','none',''] %}
+            pv_tomorrow_missing
+          {% elif not soe or states(soe) in ['unknown','unavailable','none',''] %}
+            battery_soe_missing
+          {% elif cap in ['unknown','unavailable','none',''] or (cap | float(0)) <= 0 %}
+            battery_capacity_missing
+          {% elif soe_age > max_age %}
+            battery_soe_stale
+          {% elif limit_age > max_age %}
+            charge_limit_stale
+          {% else %}
+            ok
+          {% endif %}
+        attributes:
+          charge_limit_expected: "{{ states('input_text.se_nf_charge_limit_entity') | trim }}"
+          charge_limit_configured: "{{ states('input_text.se_nf_charge_limit_entity') | trim }}"
+          soe_age_s: "{{ states('sensor.se_nf_soe_age_s') }}"
+          charge_limit_age_s: "{{ states('sensor.se_nf_charge_limit_age_s') }}"
+          max_age_s: "{{ states('input_number.se_nf_max_sensor_age_s') | int(14400) }}"
+      - name: "SE NF Writer Mode"
+        unique_id: se_nf_writer_mode
+        icon: mdi:pencil-ruler
+        state: >-
+          {% set target = states('sensor.se_nf_desired_target') | float(5000) %}
+          {% set current = states('sensor.se_nf_charge_limit_actual') | float(999999) %}
+          {% set delta = (target - current) | abs %}
+          {% set min_delta = states('input_number.se_nf_write_min_delta_w') | float(100) %}
+          {% set cooldown_s = states('input_number.se_nf_write_cooldown_s') | int(600) %}
+          {% set last_write_ts = as_timestamp(states('input_datetime.se_nf_last_write'), 0) | int(0) %}
+          {% set now_ts = now().timestamp() | int(0) %}
+          {% set cooldown_ok = (now_ts - last_write_ts) >= cooldown_s %}
+          {% set lock_active = is_state('binary_sensor.se_nf_write_lock_active','on') %}
+          {% if states(states('input_text.se_nf_charge_limit_entity') | trim) in ['unknown','unavailable','none',''] %}
+            blocked_invalid
+          {% elif delta < min_delta %}
+            idle
+          {% elif target >= 4750 %}
+            priority_open
+          {% elif lock_active %}
+            blocked_lock
+          {% elif not cooldown_ok %}
+            blocked_cooldown
+          {% else %}
+            normal
+          {% endif %}
+        attributes:
+          target_w: "{{ states('sensor.se_nf_desired_target') }}"
+          current_w: "{{ states('sensor.se_nf_charge_limit_actual') }}"
+          delta_w: >-
+            {% set target = states('sensor.se_nf_desired_target') | float(5000) %}
+            {% set current = states('sensor.se_nf_charge_limit_actual') | float(999999) %}
+            {{ (target - current) | abs | round(0) }}
+          priority_open: "{{ states('sensor.se_nf_desired_target') | float(0) >= 4750 }}"
+
+      - name: "SE NF Writer Last Decision"
+        unique_id: se_nf_writer_last_decision
+        icon: mdi:comment-check-outline
+        state: >-
+          {% set mode = states('sensor.se_nf_writer_mode') %}
+          {% set target = states('sensor.se_nf_desired_target') | float(5000) | round(0) %}
+          {% set current = states('sensor.se_nf_charge_limit_actual') | float(0) | round(0) %}
+          {% if mode == 'idle' %}
+            Kein Write nötig · Soll {{ target }} W · Ist {{ current }} W
+          {% elif mode == 'priority_open' %}
+            Priority-Open · {{ target }} W darf Cooldown/Lock umgehen
+          {% elif mode == 'normal' %}
+            Normaler Write erlaubt · Soll {{ target }} W · Ist {{ current }} W
+          {% elif mode == 'blocked_lock' %}
+            Write blockiert · Write-Lock aktiv · Soll {{ target }} W · Ist {{ current }} W
+          {% elif mode == 'blocked_cooldown' %}
+            Write blockiert · Cooldown aktiv · Soll {{ target }} W · Ist {{ current }} W
+          {% elif mode == 'blocked_invalid' %}
+            Write blockiert · SolarEdge Charge-Limit nicht verfügbar
+          {% else %}
+            Writer-Modus {{ mode }} · Soll {{ target }} W · Ist {{ current }} W
+          {% endif %}
+
+      - name: "SE NF Desired Target"
+        unique_id: se_nf_desired_target
+        unit_of_measurement: "W"
+        device_class: power
+        state_class: measurement
+        icon: mdi:file-sign
+        state: >-
+          {% set enabled = is_state('input_boolean.se_netzdienlich_enabled','on') %}
+          {% set mode = states('sensor.se_nf_optimization_mode_effective') %}
+          {% set config_ok = is_state('sensor.se_nf_config_check','ok') %}
+          {% set sanity_ok = is_state('sensor.se_nf_sanity_check','ok') %}
+          {% set state = states('input_select.se_nf_session_state') %}
+          {% set closed_w = states('input_number.se_nf_closed_charge_limit_w') | float(0) %}
+          {% set open_w = states('input_number.se_nf_open_charge_limit_w') | float(5000) %}
+          {% set lifetime_reached = is_state('input_boolean.se_nf_lifetime_target_reached','on') %}
+          {% if not enabled %}
+            {{ open_w | round(0) }}
+          {% elif not config_ok or not sanity_ok %}
+            {{ open_w | round(0) }}
+          {% elif state in ['evcc_override','low_soc','risk'] %}
+            {{ open_w | round(0) }}
+          {% elif mode == 'Eigenverbrauch maximieren' %}
+            {{ open_w | round(0) }}
+          {% elif mode == 'Akku schonen' and lifetime_reached %}
+            {{ closed_w | round(0) }}
+          {% elif state in ['open','battery_full_open'] %}
+            {{ open_w | round(0) }}
+          {% else %}
+            {{ closed_w | round(0) }}
+          {% endif %}
+
+      - name: "SE NF Status"
+        unique_id: se_nf_status
+        icon: mdi:list-status
+        state: >-
+          {% set state = states('input_select.se_nf_session_state') %}
+          {% set target = states('sensor.se_nf_desired_target') %}
+          {{ state }} · Ziel {{ target }} W
+
+      - name: "SE NF Decision Reason"
+        unique_id: se_nf_decision_reason
+        icon: mdi:text-box-search-outline
+        state: >-
+          {% set enabled = is_state('input_boolean.se_netzdienlich_enabled','on') %}
+          {% set cfg = states('sensor.se_nf_config_check') %}
+          {% set sanity = states('sensor.se_nf_sanity_check') %}
+          {% set s = states('input_select.se_nf_session_state') %}
+          {% set start_ts = states('sensor.se_nf_active_planned_start_timestamp') | int(0) %}
+          {% set start = start_ts | timestamp_custom('%H:%M', true) if start_ts > 0 else 'unbekannt' %}
+          {% if not enabled %}
+            Deaktiviert · fail-open
+          {% elif cfg != 'ok' %}
+            Config {{ cfg }} · fail-open
+          {% elif sanity != 'ok' %}
+            Sanity {{ sanity }} · fail-open
+          {% elif s == 'closed' %}
+            Geschlossen · warte auf Planung
+          {% elif s == 'armed' %}
+            Geplant · Start {{ start }} · noch geschlossen
+          {% elif s == 'open' %}
+            Offen · Ladefreigabe aktiv
+          {% elif s == 'battery_full_open' %}
+            Akku voll · Freigabe bleibt offen
+          {% elif s == 'done' %}
+            Erledigt · Tagesfenster beendet
+          {% elif s == 'evcc_override' %}
+            EVCC Override · Freigabe aktiv
+          {% elif s == 'low_soc' %}
+            Low-SoC · Freigabe aktiv
+          {% elif s == 'risk' %}
+            Risk · fail-open
+          {% else %}
+            {{ s }}
+          {% endif %}
+        attributes:
+          full_reason: "{{ states('sensor.se_nf_start_gate_reason') }}"
+          window: "{{ states('sensor.se_nf_today_charge_window') }}"
+          weather: "{{ states('sensor.se_nf_weather_planning_summary') }}"
+          load_forecast: "{{ states('sensor.se_nf_load_forecast_summary') }}"
+          target_w: "{{ states('sensor.se_nf_desired_target') }}"
+          actual_w: "{{ states('sensor.se_nf_charge_limit_actual') }}"
+
+      - name: "SE NF Phase"
+        unique_id: se_nf_phase
+        icon: mdi:state-machine
+        state: >-
+          {% set s = states('input_select.se_nf_session_state') %}
+          {% if s in ['closed','armed'] %}
+            hold_closed
+          {% elif s in ['open','battery_full_open'] %}
+            export_priority_open
+          {% elif s == 'done' %}
+            done
+          {% elif s == 'evcc_override' %}
+            evcc_override
+          {% elif s == 'low_soc' %}
+            low_soc
+          {% elif s == 'risk' %}
+            risk
+          {% else %}
+            {{ s }}
+          {% endif %}
+
+      - name: "SE NF Charge Limit Target"
+        unique_id: se_nf_charge_limit_target
+        unit_of_measurement: "W"
+        device_class: power
+        state_class: measurement
+        icon: mdi:target
+        state: "{{ states('sensor.se_nf_desired_target') | float(5000) | round(0) }}"
+
+      - name: "SE NF Effective Write Target"
+        unique_id: se_nf_effective_write_target
+        unit_of_measurement: "W"
+        device_class: power
+        state_class: measurement
+        icon: mdi:target-variant
+        state: "{{ states('sensor.se_nf_desired_target') | float(5000) | round(0) }}"
+
+      - name: "SE NF Start Gate Reason"
+        unique_id: se_nf_start_gate_reason
+        icon: mdi:gate
+        state: >-
+          {% set s = states('input_select.se_nf_session_state') %}
+          {% if s == 'armed' %}
+            Start geplant · {{ states('sensor.se_nf_today_charge_window') }}
+          {% elif s == 'open' %}
+            Ladefenster offen
+          {% elif s == 'battery_full_open' %}
+            Akku voll · Ladefreigabe bleibt offen
+          {% elif s == 'closed' %}
+            Noch geschlossen · {{ states('sensor.se_nf_next_charge_window') }}
+          {% elif s == 'done' %}
+            Tagesfenster erledigt
+          {% elif s == 'evcc_override' %}
+            EVCC fordert Ladefreigabe
+          {% elif s == 'low_soc' %}
+            Low-SoC erzwingt Ladefreigabe
+          {% elif s == 'risk' %}
+            Sicherheitsmodus · fail-open
+          {% else %}
+            {{ s }}
+          {% endif %}
+
+      - name: "SE NF SoE Age S"
+        unique_id: se_nf_soe_age_s
+        unit_of_measurement: "s"
+        icon: mdi:timer-sand
+        state: >-
+          {% set e = states('input_text.se_nf_battery_soe_entity') | trim %}
+          {% if e and states[e] is defined and states(e) not in ['unknown','unavailable','none',''] %}
+            {{ (now().timestamp() - as_timestamp(states[e].last_updated, 0)) | int(999999) }}
+          {% else %}
+            999999
+          {% endif %}
+
+      - name: "SE NF Charge Limit Age S"
+        unique_id: se_nf_charge_limit_age_s
+        unit_of_measurement: "s"
+        icon: mdi:timer-sand
+        state: >-
+          {% set e = states('input_text.se_nf_charge_limit_entity') | trim %}
+          {% if states[e] is defined and states(e) not in ['unknown','unavailable','none',''] %}
+            {{ (now().timestamp() - as_timestamp(states[e].last_updated, 0)) | int(999999) }}
+          {% else %}
+            999999
+          {% endif %}
+
+      - name: "SE NF Sanity Check"
+        unique_id: se_nf_sanity_check
+        icon: mdi:shield-check-outline
+        state: >-
+          {% set cfg = states('sensor.se_nf_config_check') %}
+          {% set soe = states('sensor.se_nf_battery_soe') | float(-1) %}
+          {% set cap = states('sensor.se_nf_battery_capacity_kwh') | float(0) %}
+          {% set limit = states('sensor.se_nf_charge_limit_actual') | float(-1) %}
+          {% if cfg != 'ok' %}
+            config_{{ cfg }}
+          {% elif soe < 0 or soe > 100 %}
+            soe_out_of_range
+          {% elif cap <= 0 %}
+            battery_capacity_invalid
+          {% elif limit < 0 or limit > 5000 %}
+            charge_limit_out_of_range
+          {% else %}
+            ok
+          {% endif %}
+    binary_sensor:
+      - name: "SE NF Config OK"
+        unique_id: se_nf_config_ok
+        icon: mdi:check-circle-outline
+        state: >-
+          {{ is_state('sensor.se_nf_config_check','ok') }}
+
+      - name: "SE NF Write Lock Active"
+        unique_id: se_nf_write_lock_active
+        icon: mdi:lock-clock
+        state: >-
+          {% set until_ts = as_timestamp(states('input_datetime.se_nf_write_lock_until'), 0) | int(0) %}
+          {{ until_ts > (now().timestamp() | int(0)) }}
+
+      - name: "SE NF EVCC Grid Charge Request"
+        unique_id: se_nf_evcc_grid_charge_request
+        delay_on:
+          minutes: 1
+        delay_off:
+          minutes: 12
+        icon: mdi:ev-station
+        state: >-
+          {% set bad = ['unknown','unavailable','none','None',''] %}
+            {% set evcc_e = states('input_text.se_nf_evcc_battery_mode_entity') | trim %}
+            {% set mode = states(evcc_e) | lower | trim if evcc_e not in bad else '' %}
+          {% set bad = ['unknown','unavailable','none','off','idle','normal','hold',''] %}
+          {% set is_discharge = 'discharge' in mode or 'entladen' in mode %}
+          {% set is_charge = 'charge' in mode or 'laden' in mode %}
+          {{ mode not in bad and is_charge and not is_discharge }}
+
+
+      - name: "SE NF Sanity OK"
+        unique_id: se_nf_sanity_ok
+        icon: mdi:shield-check
+        state: >-
+          {{ is_state('sensor.se_nf_sanity_check','ok') }}
+
+      - name: "SE NF Risk Flag"
+        unique_id: se_nf_risk_flag
+        icon: mdi:alert-outline
+        state: >-
+          {{ not is_state('sensor.se_nf_config_check','ok') or not is_state('sensor.se_nf_sanity_check','ok') or is_state('input_select.se_nf_session_state','risk') }}
+
+      - name: "SE NF Risk Confirmed"
+        unique_id: se_nf_risk_confirmed
+        icon: mdi:alert-circle-check-outline
+        state: >-
+          {{ is_state('binary_sensor.se_nf_risk_flag','on') }}
+
+      - name: "SE NF Min Open Latch Active"
+        unique_id: se_nf_min_open_latch_active
+        icon: mdi:lock-open-variant-outline
+        state: >-
+          {{ states('input_select.se_nf_session_state') in ['open','battery_full_open','evcc_override','low_soc','risk'] }}
+
+  # >>> merged from solaredge_netzdienlich_v293a_adaptive_forecast_bias.yaml
+  - sensor:
+      - name: "SE NF Adaptive Forecast Bias Version"
+        unique_id: se_nf_adaptive_forecast_bias_version
+        icon: mdi:tag
+        state: "2.9.3a-adaptive-forecast-bias"
+
+      - name: "SE NF Adaptive PV Actual Today Source"
+        unique_id: se_nf_adaptive_pv_actual_today_source
+        icon: mdi:solar-power
+        state: >-
+          {% set bad = ['unknown','unavailable','none','None',''] %}
+          {% set candidates = states('input_text.se_nf_actual_pv_today_entities').split(',') %}
+          {% set ns = namespace(eid='none') %}
+          {% for eid in candidates %}
+            {% set e = eid | string | trim %}
+            {% if ns.eid == 'none' and e.startswith('sensor.') and states(e) not in bad %}
+              {% set ns.eid = e %}
+            {% endif %}
+          {% endfor %}
+          {{ ns.eid }}
+
+      - name: "SE NF Adaptive PV Actual Today"
+        unique_id: se_nf_adaptive_pv_actual_today
+        unit_of_measurement: "kWh"
+        icon: mdi:solar-power
+        state: >-
+          {% set eid = states('sensor.se_nf_adaptive_pv_actual_today_source') %}
+          {% set bad = ['unknown','unavailable','none','None',''] %}
+          {% if eid.startswith('sensor.') and states(eid) not in bad %}
+            {{ states(eid) | float(0) | round(3) }}
+          {% else %}
+            0
+          {% endif %}
+
+      - name: "SE NF Adaptive PV Overmorrow Source"
+        unique_id: se_nf_adaptive_pv_overmorrow_source
+        icon: mdi:weather-sunny-alert
+        state: >-
+          {% set bad = ['unknown','unavailable','none','None',''] %}
+          {% set candidates = states('input_text.se_nf_pv_overmorrow_entities').split(',') %}
+          {% set ns = namespace(eid='none') %}
+          {% for eid in candidates %}
+            {% set e = eid | string | trim %}
+            {% if ns.eid == 'none' and e.startswith('sensor.') and states(e) not in bad %}
+              {% set ns.eid = e %}
+            {% endif %}
+          {% endfor %}
+          {{ ns.eid }}
+
+      - name: "SE NF Adaptive PV Overmorrow"
+        unique_id: se_nf_adaptive_pv_overmorrow
+        unit_of_measurement: "kWh"
+        icon: mdi:weather-sunny-alert
+        state: >-
+          {% set eid = states('sensor.se_nf_adaptive_pv_overmorrow_source') %}
+          {% set bad = ['unknown','unavailable','none','None',''] %}
+          {% if eid.startswith('sensor.') and states(eid) not in bad %}
+            {{ states(eid) | float(0) | round(2) }}
+          {% else %}
+            {{ states('sensor.se_nf_pv_forecast_tomorrow') | float(0) | round(2) }}
+          {% endif %}
+
+      - name: "SE NF Adaptive Forecast Expected PV Until Now"
+        unique_id: se_nf_adaptive_forecast_expected_pv_until_now
+        unit_of_measurement: "kWh"
+        icon: mdi:chart-line
+        state: >-
+          {% set total = states('sensor.se_nf_pv_forecast_today_total') | float(0) %}
+          {% set rem = states('sensor.se_nf_remaining_pv_today') | float(0) %}
+          {{ ([total - rem, 0] | max) | round(3) }}
+
+      - name: "SE NF Adaptive Forecast Live Raw"
+        unique_id: se_nf_adaptive_forecast_live_raw
+        icon: mdi:chart-bell-curve
+        state: >-
+          {% set actual = states('sensor.se_nf_adaptive_pv_actual_today') | float(0) %}
+          {% set expected = states('sensor.se_nf_adaptive_forecast_expected_pv_until_now') | float(0) %}
+          {% set src = states('sensor.se_nf_adaptive_pv_actual_today_source') %}
+          {% if src == 'none' or expected <= 0.2 %}
+            1.0
+          {% else %}
+            {{ (actual / expected) | round(3) }}
+          {% endif %}
+
+      - name: "SE NF Adaptive Forecast Live Reliability"
+        unique_id: se_nf_adaptive_forecast_live_reliability
+        icon: mdi:signal
+        state: >-
+          {% set expected = states('sensor.se_nf_adaptive_forecast_expected_pv_until_now') | float(0) %}
+          {% set total = states('sensor.se_nf_pv_forecast_today_total') | float(0) %}
+          {% if total <= 0 %}
+            0
+          {% else %}
+            {% set progress = expected / total %}
+            {% set rel = (progress - 0.05) / 0.35 %}
+            {{ ([[rel, 0] | max, 1] | min) | round(3) }}
+          {% endif %}
+
+      - name: "SE NF Adaptive Forecast Live Blend"
+        unique_id: se_nf_adaptive_forecast_live_blend
+        icon: mdi:tune-variant
+        state: >-
+          {% set raw = states('sensor.se_nf_adaptive_forecast_live_raw') | float(1) %}
+          {% set rel = states('sensor.se_nf_adaptive_forecast_live_reliability') | float(0) %}
+          {% set rawc = ([[raw, 0.70] | max, 1.20] | min) %}
+          {% set weight = 0.35 * rel %}
+          {% set blend = 1 + weight * (rawc - 1) %}
+          {{ ([[blend, 0.88] | max, 1.08] | min) | round(3) }}
+
+      - name: "SE NF Adaptive Forecast Trend Score"
+        unique_id: se_nf_adaptive_forecast_trend_score
+        unit_of_measurement: "kWh"
+        icon: mdi:calendar-range
+        state: >-
+          {% set load = states('sensor.se_nf_load_forecast_7d_cached') | float(0) %}
+          {% set tomorrow = states('sensor.se_nf_pv_forecast_tomorrow') | float(0) %}
+          {% set over = states('sensor.se_nf_adaptive_pv_overmorrow') | float(tomorrow) %}
+          {% set score = 0.65 * (tomorrow - load) + 0.35 * (over - load) %}
+          {{ score | round(2) }}
+
+      - name: "SE NF Adaptive Forecast Trend"
+        unique_id: se_nf_adaptive_forecast_trend
+        icon: mdi:calendar-range
+        state: >-
+          {% set score = states('sensor.se_nf_adaptive_forecast_trend_score') | float(0) %}
+          {% if score >= 8 %}
+            stark
+          {% elif score >= 2 %}
+            normal_gut
+          {% elif score >= -2 %}
+            neutral
+          {% elif score >= -6 %}
+            schwach
+          {% else %}
+            kritisch
+          {% endif %}
+
+      - name: "SE NF Adaptive Forecast Target Delta Pct"
+        unique_id: se_nf_adaptive_forecast_target_delta_pct
+        unit_of_measurement: "%"
+        icon: mdi:battery-sync
+        state: >-
+          {% set mode = states('sensor.se_nf_optimization_mode_effective') %}
+          {% set score = states('sensor.se_nf_adaptive_forecast_trend_score') | float(0) %}
+          {% set raw = -score / 4 %}
+          {% if mode == 'Akku schonen' %}
+            {{ ([[raw, -2.0] | max, 6.0] | min) | round(2) }}
+          {% elif mode == 'Netzdienlich laden' %}
+            {% set v = raw * 0.5 %}
+            {{ ([[v, -1.0] | max, 3.0] | min) | round(2) }}
+          {% elif mode == 'Eigenverbrauch maximieren' %}
+            {{ ([[raw, 0.0] | max, 4.0] | min) | round(2) }}
+          {% else %}
+            0
+          {% endif %}
+
+      - name: "SE NF Adaptive Forecast Shadow Buffer"
+        unique_id: se_nf_adaptive_forecast_shadow_buffer
+        unit_of_measurement: "kWh"
+        icon: mdi:battery-clock
+        state: >-
+          {% set rem = states('sensor.se_nf_remaining_pv_today') | float(0) %}
+          {% set weather = states('sensor.se_nf_weather_planning_factor_today') | float(1) %}
+          {% set base_pv = rem * weather %}
+          {% set blend = states('sensor.se_nf_adaptive_forecast_live_blend') | float(1) %}
+          {% set corrected_pv = base_pv * blend %}
+          {% set load = states('sensor.se_nf_lifetime_night_energy_forecast') | float(states('sensor.se_nf_load_forecast_7d_cached') | float(0)) %}
+          {% set need = states('sensor.se_nf_needed_energy') | float(0) %}
+          {% set cap = states('sensor.se_nf_battery_capacity_kwh') | float(0) %}
+          {% set dpct = states('sensor.se_nf_adaptive_forecast_target_delta_pct') | float(0) %}
+          {% set delta_kwh = cap * dpct / 100 %}
+          {% set effective_need = [need + delta_kwh, 0] | max %}
+          {{ (corrected_pv - load - effective_need) | round(2) }}
+
+      - name: "SE NF Adaptive Forecast Raw Shift Minutes"
+        unique_id: se_nf_adaptive_forecast_raw_shift_minutes
+        unit_of_measurement: "min"
+        icon: mdi:clock-fast
+        state: >-
+          {% set rem = states('sensor.se_nf_remaining_pv_today') | float(0) %}
+          {% set weather = states('sensor.se_nf_weather_planning_factor_today') | float(1) %}
+          {% set base_pv = rem * weather %}
+          {% set load = states('sensor.se_nf_lifetime_night_energy_forecast') | float(states('sensor.se_nf_load_forecast_7d_cached') | float(0)) %}
+          {% set need = states('sensor.se_nf_needed_energy') | float(0) %}
+          {% set base_buffer = base_pv - load - need %}
+
+          {% set shadow = states('sensor.se_nf_adaptive_forecast_shadow_buffer') | float(base_buffer) %}
+          {% set delta = shadow - base_buffer %}
+          {% set power = states('input_number.se_nf_planning_charge_power_w') | float(3500) / 1000 %}
+          {% if power <= 0 %}
+            0
+          {% else %}
+            {{ ((-delta / power) * 60) | round(1) }}
+          {% endif %}
+
+      - name: "SE NF Adaptive Forecast Bias Minutes"
+        unique_id: se_nf_adaptive_forecast_bias_minutes
+        unit_of_measurement: "min"
+        icon: mdi:clock-edit
+        state: >-
+          {% set enabled = is_state('input_boolean.se_nf_adaptive_forecast_bias_enabled','on') %}
+          {% set safe = is_state('sensor.se_nf_sanity_check','ok')
+                        and is_state('sensor.se_nf_config_check','ok')
+                        and is_state('binary_sensor.se_nf_risk_flag','off') %}
+          {% if not enabled or not safe %}
+            0
+          {% else %}
+            {% set mode = states('sensor.se_nf_optimization_mode_effective') %}
+            {% set raw = states('sensor.se_nf_adaptive_forecast_raw_shift_minutes') | float(0) %}
+
+            {% if mode == 'Akku schonen' %}
+              {% set lo = -30 %}
+              {% set hi = 45 %}
+            {% elif mode == 'Netzdienlich laden' %}
+              {% set lo = -45 %}
+              {% set hi = 60 %}
+            {% elif mode == 'Eigenverbrauch maximieren' %}
+              {% set lo = 0 %}
+              {% set hi = 30 %}
+            {% else %}
+              {% set lo = -20 %}
+              {% set hi = 30 %}
+            {% endif %}
+
+            {% set bounded = ([[raw, lo] | max, hi] | min) | round(0) | int(0) %}
+            {% if bounded | abs < 10 %}
+              0
+            {% else %}
+              {{ bounded }}
+            {% endif %}
+          {% endif %}
+
+      - name: "SE NF Adaptive Forecast Summary"
+        unique_id: se_nf_adaptive_forecast_summary
+        icon: mdi:clipboard-text-clock
+        state: >-
+          {% set enabled = is_state('input_boolean.se_nf_adaptive_forecast_bias_enabled','on') %}
+          {% set bias = states('sensor.se_nf_adaptive_forecast_bias_minutes') | int(0) %}
+          {% set raw = states('sensor.se_nf_adaptive_forecast_raw_shift_minutes') | float(0) %}
+          {% set live = states('sensor.se_nf_adaptive_forecast_live_blend') | float(1) %}
+          {% set trend = states('sensor.se_nf_adaptive_forecast_trend') %}
+          {% set shadow = states('sensor.se_nf_adaptive_forecast_shadow_buffer') | float(0) %}
+          {% if not enabled %}
+            aus · raw {{ raw | round(0) }} min · live {{ live }} · trend {{ trend }} · puffer {{ shadow }} kWh
+          {% elif bias > 0 %}
+            aktiv · {{ bias }} min früher · raw {{ raw | round(0) }} · live {{ live }} · trend {{ trend }} · puffer {{ shadow }} kWh
+          {% elif bias < 0 %}
+            aktiv · {{ bias | abs }} min später · raw {{ raw | round(0) }} · live {{ live }} · trend {{ trend }} · puffer {{ shadow }} kWh
+          {% else %}
+            aktiv · neutral · raw {{ raw | round(0) }} min · live {{ live }} · trend {{ trend }} · puffer {{ shadow }} kWh
+          {% endif %}
+  # <<< merged from solaredge_netzdienlich_v293a_adaptive_forecast_bias.yaml
+
+  # >>> merged from solaredge_netzdienlich_v293b_live_forecast_gap_guard.yaml
+  - sensor:
+      - name: "SE NF Live Forecast Gap Guard Version"
+        unique_id: se_nf_live_forecast_gap_guard_version
+        icon: mdi:tag
+        state: "2.9.3b-live-forecast-gap-guard"
+
+      - name: "SE NF Live PV Forecast Now"
+        unique_id: se_nf_live_pv_forecast_now
+        unit_of_measurement: "W"
+        icon: mdi:solar-power
+        state: >-
+          {% set bad = ['unknown','unavailable','none','None',''] %}
+          {% set configured = states('input_text.se_nf_forecast_now_entity') | trim %}
+            {% set candidates = [configured, 'sensor.pv_prognose_leistung_jetzt_biased_interpoliert', 'sensor.evcc_forecast_solar'] %}
+          {% set ns = namespace(v=0) %}
+          {% for eid in candidates %}
+            {% if ns.v == 0 and states(eid) not in bad %}
+              {% set ns.v = states(eid) | float(0) %}
+            {% endif %}
+          {% endfor %}
+          {{ ns.v | round(0) }}
+
+      - name: "SE NF Live PV Actual Now"
+        unique_id: se_nf_live_pv_actual_now
+        unit_of_measurement: "W"
+        icon: mdi:solar-power-variant
+        state: >-
+          {% set bad = ['unknown','unavailable','none','None',''] %}
+          {% set candidates = states('input_text.se_nf_live_pv_power_entities').split(',') %}
+          {% set ns = namespace(v=0) %}
+          {% for eid in candidates %}
+            {% if ns.v == 0 and states(eid) not in bad %}
+              {% set ns.v = states(eid) | float(0) %}
+            {% endif %}
+          {% endfor %}
+          {{ ns.v | round(0) }}
+
+      - name: "SE NF Live PV Forecast Ratio Now"
+        unique_id: se_nf_live_pv_forecast_ratio_now
+        icon: mdi:percent
+        state: >-
+          {% set actual = states('sensor.se_nf_live_pv_actual_now') | float(0) %}
+          {% set forecast = states('sensor.se_nf_live_pv_forecast_now') | float(0) %}
+          {% if forecast < 50 %}
+            1.0
+          {% else %}
+            {{ [actual / forecast, 1] | min | round(3) }}
+          {% endif %}
+
+      - name: "SE NF Live Battery PV Margin"
+        unique_id: se_nf_live_battery_pv_margin
+        unit_of_measurement: "kWh"
+        icon: mdi:battery-clock
+        state: >-
+          {% set need = states('sensor.se_nf_needed_energy') | float(0) %}
+          {% set pv_for_akku = states('sensor.se_nf_available_pv_for_battery_today') | float(none) %}
+          {% if pv_for_akku is number %}
+            {{ (pv_for_akku - need) | round(2) }}
+          {% else %}
+            {% set rem = states('sensor.se_nf_remaining_pv_today') | float(0) %}
+            {% set weather = states('sensor.se_nf_weather_planning_factor_today') | float(1) %}
+            {% set night = states('sensor.se_nf_lifetime_night_energy_forecast') | float(states('sensor.se_nf_load_forecast_7d_cached') | float(0)) %}
+            {{ ((rem * weather) - night - need) | round(2) }}
+          {% endif %}
+
+      - name: "SE NF Live Forecast Gap Lead Minutes"
+        unique_id: se_nf_live_forecast_gap_lead_minutes
+        unit_of_measurement: "min"
+        icon: mdi:clock-fast
+        state: >-
+          {% set enabled = is_state('input_boolean.se_nf_adaptive_forecast_bias_enabled','on') %}
+          {% set safe = is_state('sensor.se_nf_sanity_check','ok')
+                        and is_state('sensor.se_nf_config_check','ok')
+                        and is_state('binary_sensor.se_nf_risk_flag','off') %}
+          {% set session = states('input_select.se_nf_session_state') %}
+          {% set ratio = states('sensor.se_nf_live_pv_forecast_ratio_now') | float(1) %}
+          {% set margin = states('sensor.se_nf_live_battery_pv_margin') | float(99) %}
+          {% set need = states('sensor.se_nf_needed_energy') | float(0) %}
+          {% set forecast_now = states('sensor.se_nf_live_pv_forecast_now') | float(0) %}
+          {% set mode = states('sensor.se_nf_optimization_mode_effective') %}
+
+          {% if not enabled or not safe or session not in ['closed','armed'] or need <= 0.10 or forecast_now < 100 %}
+            0
+          {% else %}
+            {% if ratio < 0.35 and margin < 0.30 %}
+              {% set lead = 45 %}
+            {% elif ratio < 0.50 and margin < 0.50 %}
+              {% set lead = 30 %}
+            {% elif ratio < 0.70 and margin < 0.30 %}
+              {% set lead = 15 %}
+            {% else %}
+              {% set lead = 0 %}
+            {% endif %}
+
+            {% if mode == 'Akku schonen' %}
+              {{ [lead, 45] | min }}
+            {% elif mode == 'Netzdienlich laden' %}
+              {{ [lead, 60] | min }}
+            {% elif mode == 'Eigenverbrauch maximieren' %}
+              {{ [lead, 30] | min }}
+            {% else %}
+              {{ [lead, 30] | min }}
+            {% endif %}
+          {% endif %}
+
+      - name: "SE NF Live Forecast Gap Summary"
+        unique_id: se_nf_live_forecast_gap_summary
+        icon: mdi:clipboard-alert
+        state: >-
+          {% set ratio = states('sensor.se_nf_live_pv_forecast_ratio_now') | float(1) %}
+          {% set actual = states('sensor.se_nf_live_pv_actual_now') | float(0) %}
+          {% set forecast = states('sensor.se_nf_live_pv_forecast_now') | float(0) %}
+          {% set margin = states('sensor.se_nf_live_battery_pv_margin') | float(0) %}
+          {% set lead = states('sensor.se_nf_live_forecast_gap_lead_minutes') | int(0) %}
+          {% if lead > 0 %}
+            aktiv · {{ lead }} min früher · PV {{ actual | round(0) }}W statt {{ forecast | round(0) }}W · Ratio {{ (ratio*100) | round(0) }}% · Akku-Puffer {{ margin }} kWh
+          {% else %}
+            neutral · PV {{ actual | round(0) }}W statt {{ forecast | round(0) }}W · Ratio {{ (ratio*100) | round(0) }}% · Akku-Puffer {{ margin }} kWh
+          {% endif %}
+  # <<< merged from solaredge_netzdienlich_v293b_live_forecast_gap_guard.yaml
+
+  # >>> merged from solaredge_netzdienlich_v293c_lifetime_latch_repair.yaml
+  - sensor:
+      - name: "SE NF Lifetime Latch Repair Version"
+        unique_id: se_nf_lifetime_latch_repair_version
+        icon: mdi:tag
+        state: "2.9.3c-lifetime-latch-repair"
+
+      - name: "SE NF Lifetime Latch Repair Status"
+        unique_id: se_nf_lifetime_latch_repair_status
+        icon: mdi:battery-sync
+        state: >-
+          {% set enabled = is_state('input_boolean.se_nf_lifetime_latch_repair_enabled','on') %}
+          {% set mode = states('input_select.se_nf_optimization_mode') %}
+          {% set session = states('input_select.se_nf_session_state') %}
+          {% set latch = is_state('input_boolean.se_nf_lifetime_target_reached','on') %}
+          {% set soe = states('sensor.se_nf_battery_soe') | float(0) %}
+          {% set target = states('sensor.speicher_ziel_ladestand') | float(100) %}
+          {% set need = states('sensor.se_nf_needed_energy') | float(0) %}
+          {% set planned_ts = states('sensor.se_nf_today_planned_start_candidate_timestamp') | int(0) %}
+          {% set now_ts = as_timestamp(now()) | int(0) %}
+          {% set end_grace_ts = states('sensor.se_nf_today_end_with_grace_timestamp') | int(0) %}
+          {% set in_window = planned_ts > 0 and planned_ts <= now_ts and (end_grace_ts <= 0 or now_ts <= end_grace_ts) %}
+          {% if not enabled %}
+            aus
+          {% elif mode != 'Akku schonen' %}
+            neutral · Modus {{ mode }}
+          {% elif latch and soe < target - 1 %}
+            repair_needed · Latch on, SoE {{ soe | round(1) }} < Ziel {{ target | round(1) }}
+          {% elif session == 'done' and need > 0.1 and in_window and soe < target - 1 %}
+            reopen_needed · done trotz Bedarf {{ need | round(2) }} kWh
+          {% else %}
+            ok · {{ session }} · Latch {{ 'on' if latch else 'off' }} · SoE {{ soe | round(1) }} / Ziel {{ target | round(1) }}
+          {% endif %}
+  # <<< merged from solaredge_netzdienlich_v293c_lifetime_latch_repair.yaml
+
+  # >>> merged from solaredge_speicher_user_settings.yaml / rc2 target SOC sensor
+  - sensor:
+      - name: "Speicher Ziel Ladestand"
+        unique_id: speicher_ziel_ladestand
+        icon: mdi:battery-check
+        unit_of_measurement: "%"
+        state: >-
+          {% set mode = states('input_select.se_nf_optimization_mode') %}
+          {% set normal_target = states('input_number.se_nf_target_soc_pct') | float(0) %}
+
+          {% if mode == 'Akku schonen' %}
+            {% set cap_entity = states('input_text.se_nf_battery_capacity_entity') | trim %}
+            {% set cap_auto = states(cap_entity) | float(0) if cap_entity not in ['unknown','unavailable','none',''] else 0 %}
+            {% set cap_manual = states('input_number.se_nf_battery_capacity_kwh_manual') | float(0) %}
+            {% set cap = cap_auto if cap_auto > 0 else cap_manual %}
+
+            {% set reserve_e = states('input_text.se_nf_backup_reserve_entity') | trim %}
+              {% set reserve = states(reserve_e) | float(0) if reserve_e not in ['unknown','unavailable','none','None',''] else 0 %}
+            {% set night = states('sensor.se_nf_lifetime_night_energy_forecast') | float(0) %}
+            {% set safety = states('input_number.se_nf_lifetime_safety_kwh') | float(0) %}
+            {% set extra_buffer = states('input_number.se_nf_lifetime_soc_buffer_pct') | float(0) %}
+            {% set min_soc = states('input_number.se_nf_lifetime_min_target_soc_pct') | float(0) %}
+            {% set max_soc = states('input_number.se_nf_lifetime_max_target_soc_pct') | float(normal_target) %}
+
+            {% if cap > 0 %}
+              {% set raw = reserve + ((night + safety) / cap * 100) + extra_buffer %}
+              {{ [[raw, min_soc] | max, max_soc] | min | round(1) }}
+            {% else %}
+              {{ normal_target | round(1) }}
+            {% endif %}
+          {% else %}
+            {{ normal_target | round(1) }}
+          {% endif %}
+        attributes:
+          speicherstrategie: "{{ states('input_select.se_nf_optimization_mode') }}"
+          speichergroesse_quelle: >-
+            {% set cap_entity = states('input_text.se_nf_battery_capacity_entity') | trim %}
+            {% set cap_auto = states(cap_entity) | float(0) if cap_entity not in ['unknown','unavailable','none',''] else 0 %}
+            {% if cap_auto > 0 %}
+              Sensor
+            {% elif states('input_number.se_nf_battery_capacity_kwh_manual') | float(0) > 0 %}
+              manuell
+            {% else %}
+              fehlt
+            {% endif %}
+          speichergroesse_kwh: >-
+            {% set cap_entity = states('input_text.se_nf_battery_capacity_entity') | trim %}
+            {% set cap_auto = states(cap_entity) | float(0) if cap_entity not in ['unknown','unavailable','none',''] else 0 %}
+            {% set cap_manual = states('input_number.se_nf_battery_capacity_kwh_manual') | float(0) %}
+            {{ (cap_auto if cap_auto > 0 else cap_manual) | round(2) }}
+          geplanter_nachtbedarf_kwh: "{{ states('sensor.se_nf_lifetime_night_energy_forecast') }}"
+          zusaetzlicher_puffer_pct: "{{ states('input_number.se_nf_lifetime_soc_buffer_pct') }}"
+          erklaerung: "Bei Akku schonen wird der Ziel-Ladestand aus Nachtbedarf, Reserve und zusätzlichem Puffer berechnet."
+  # <<< merged from solaredge_speicher_user_settings.yaml / rc2 target SOC sensor
+
+  # >>> V3.0-rc4: mappable PV actual meter source
+  - sensor:
+      - name: "SE NF PV Actual Meter Source Energy"
+        unique_id: se_nf_pv_actual_meter_source_energy
+        unit_of_measurement: "kWh"
+        device_class: energy
+        state_class: total_increasing
+        icon: mdi:solar-power-variant
+        state: >-
+          {% set bad = ['unknown','unavailable','none','None',''] %}
+          {% set e = states('input_text.se_nf_pv_actual_meter_source_entity') | trim %}
+          {% if e not in bad and e.startswith('sensor.') %}
+            {% set v = states(e) %}
+            {{ v | float(0) if v not in bad else 0 }}
+          {% else %}
+            0
+          {% endif %}
+        attributes:
+          source_entity: "{{ states('input_text.se_nf_pv_actual_meter_source_entity') | trim }}"
+          note: "V3.0-rc4: Utility-Meter-Quelle ist über input_text.se_nf_pv_actual_meter_source_entity konfigurierbar."
+  # <<< V3.0-rc4: mappable PV actual meter source
+automation:
+  - id: se_nf_v288_sql_load_forecast_poll
+    alias: "SolarEdge: Netzdienlich V2.8.9a SQL Load Forecast Poll"
+    mode: single
+    trigger:
+      - platform: homeassistant
+        event: start
+      - platform: time_pattern
+        minutes: "/10"
+    action:
+      - service: homeassistant.update_entity
+        target:
+          entity_id: sensor.se_nf_load_forecast_7d_cached
+
+  - id: se_nf_v28_new_day_reset
+    alias: "SolarEdge: Netzdienlich V2.8 New Day Reset"
+    mode: single
+    trigger:
+      - platform: time
+        at: "06:00:00"
+    action:
+      - variables:
+          cfg_ok: "{{ is_state('sensor.se_nf_config_check','ok') }}"
+          sanity_ok: "{{ is_state('sensor.se_nf_sanity_check','ok') }}"
+          soe: "{{ states('sensor.se_nf_battery_soe') | float(0) }}"
+          low: "{{ states('input_number.se_nf_low_soc_floor_pct') | float(25) }}"
+          evcc: "{{ is_state('binary_sensor.se_nf_evcc_grid_charge_request','on') }}"
+          next_state: >-
+            {% if not cfg_ok or not sanity_ok %}
+              risk
+            {% elif evcc %}
+              evcc_override
+            {% elif soe | float(0) <= low | float(25) %}
+              low_soc
+            {% else %}
+              closed
+            {% endif %}
+      - service: input_select.select_option
+        target:
+          entity_id: input_select.se_nf_session_state
+        data:
+          option: "{{ next_state | trim }}"
+
+  - id: se_nf_v28_plan_freeze
+    alias: "SolarEdge: Netzdienlich V2.8.1 Plan Freeze Guard"
+    mode: restart
+    trigger:
+      - platform: homeassistant
+        event: start
+      - platform: time_pattern
+        minutes: "/15"
+      - platform: state
+        entity_id:
+          - sensor.se_nf_today_planned_start_candidate_timestamp
+          - input_select.se_nf_session_state
+          - input_select.se_nf_optimization_mode
+          - input_number.se_nf_replan_threshold_min
+          - input_datetime.se_nf_session_planned_start
+    condition:
+      - condition: state
+        entity_id: input_boolean.se_netzdienlich_enabled
+        state: "on"
+      - condition: state
+        entity_id: binary_sensor.se_nf_config_ok
+        state: "on"
+    action:
+      - variables:
+          candidate_ts: "{{ states('sensor.se_nf_today_planned_start_candidate_timestamp') | int(0) }}"
+          current_ts: "{{ as_timestamp(states('input_datetime.se_nf_session_planned_start'), 0) | int(0) }}"
+          threshold_s: "{{ states('input_number.se_nf_replan_threshold_min') | int(30) * 60 }}"
+          min_hour: "{{ states('sensor.se_nf_mode_min_start_hour') | float(11.75) }}"
+          min_h: "{{ min_hour | int(0) }}"
+          min_m: "{{ ((min_hour | float(11.75) - min_h | int(0)) * 60) | round(0) | int(0) }}"
+          min_ts: "{{ as_timestamp(today_at('%02d:%02d:00' | format(min_h | int(0), min_m | int(0))), 0) | int(0) }}"
+          end_grace_ts: "{{ states('sensor.se_nf_today_end_with_grace_timestamp') | int(0) }}"
+          day_start_ts: "{{ as_timestamp(today_at('06:00:00'), 0) | int(0) }}"
+          current_valid: "{{ current_ts | int(0) >= min_ts | int(0) and current_ts | int(0) <= end_grace_ts | int(0) }}"
+          state_now: "{{ states('input_select.se_nf_session_state') }}"
+          critical_planned_valid: >-
+            {{ is_state('input_boolean.se_nf_critical_deficit_latched_today','on')
+               and current_ts | int(0) > 0
+               and current_ts | int(0) >= day_start_ts | int(0)
+               and current_ts | int(0) <= end_grace_ts | int(0)
+               and is_state('sensor.se_nf_sanity_check','ok')
+               and is_state('sensor.se_nf_config_check','ok')
+               and is_state('binary_sensor.se_nf_risk_flag','off') }}
+          may_replan: >-
+            {{ (state_now in ['closed','armed'] or not current_valid)
+               and not critical_planned_valid }}
+      - condition: template
+        value_template: >-
+          {{ candidate_ts | int(0) > 0
+             and may_replan
+             and (
+               not current_valid
+               or current_ts | int(0) <= 0
+               or (candidate_ts | int(0) - current_ts | int(0)) | abs >= threshold_s | int(1800)
+             ) }}
+      - service: input_datetime.set_datetime
+        target:
+          entity_id: input_datetime.se_nf_session_planned_start
+        data:
+          datetime: "{{ (candidate_ts | int(0)) | timestamp_custom('%Y-%m-%d %H:%M:%S', true) }}"
+
+  - id: se_nf_v28_session_manager
+    alias: "SolarEdge: Netzdienlich V2.8.1 Session Manager"
+    mode: restart
+    trigger:
+      - platform: homeassistant
+        event: start
+      - platform: time_pattern
+        minutes: "/2"
+      - platform: state
+        entity_id:
+          - input_boolean.se_netzdienlich_enabled
+          - input_select.se_nf_session_state
+          - input_select.se_nf_optimization_mode
+          - sensor.se_nf_config_check
+          - sensor.se_nf_sanity_check
+          - sensor.se_nf_battery_soe
+          - sensor.se_nf_needed_energy
+          - input_datetime.se_nf_session_planned_start
+          - sensor.se_nf_active_planned_start_timestamp
+          - input_datetime.se_nf_last_open_write
+          - binary_sensor.se_nf_evcc_grid_charge_request
+    action:
+      - variables:
+          enabled: "{{ is_state('input_boolean.se_netzdienlich_enabled','on') }}"
+          cfg_ok: "{{ is_state('sensor.se_nf_config_check','ok') }}"
+          sanity_ok: "{{ is_state('sensor.se_nf_sanity_check','ok') }}"
+          now_ts: "{{ now().timestamp() | int(0) }}"
+          day_start_ts: "{{ as_timestamp(today_at('06:00:00'), 0) | int(0) }}"
+          planned_ts: "{{ as_timestamp(states('input_datetime.se_nf_session_planned_start'), 0) | int(0) }}"
+          active_planned_ts: "{{ states('sensor.se_nf_active_planned_start_timestamp') | int(0) }}"
+          candidate_ts: "{{ states('sensor.se_nf_today_planned_start_candidate_timestamp') | int(0) }}"
+          last_open_ts: "{{ as_timestamp(states('input_datetime.se_nf_last_open_write'), 0) | int(0) }}"
+          end_grace_ts: "{{ states('sensor.se_nf_today_end_with_grace_timestamp') | int(0) }}"
+          min_hour: "{{ states('sensor.se_nf_mode_min_start_hour') | float(11.75) }}"
+          min_h: "{{ min_hour | int(0) }}"
+          min_m: "{{ ((min_hour | float(11.75) - min_h | int(0)) * 60) | round(0) | int(0) }}"
+          min_ts: "{{ as_timestamp(today_at('%02d:%02d:00' | format(min_h | int(0), min_m | int(0))), 0) | int(0) }}"
+          critical_planned_valid: >-
+            {{ is_state('input_boolean.se_nf_critical_deficit_latched_today','on')
+               and planned_ts | int(0) > 0
+               and planned_ts | int(0) >= day_start_ts | int(0)
+               and planned_ts | int(0) <= end_grace_ts | int(0)
+               and cfg_ok
+               and sanity_ok
+               and is_state('binary_sensor.se_nf_risk_flag','off') }}
+          planned_valid: "{{ (planned_ts | int(0) >= min_ts | int(0) and planned_ts | int(0) <= end_grace_ts | int(0)) or critical_planned_valid }}"
+          opened_today: "{{ last_open_ts | int(0) >= day_start_ts | int(0) and last_open_ts | int(0) > 0 }}"
+          valid_planned_open_today: >-
+            {{ last_open_ts | int(0) >= day_start_ts | int(0)
+               and last_open_ts | int(0) > 0
+               and planned_valid
+               and planned_ts | int(0) > 0
+               and last_open_ts | int(0) >= (planned_ts | int(0) - 60) }}
+          soe: "{{ states('sensor.se_nf_battery_soe') | float(0) }}"
+          low: "{{ states('input_number.se_nf_low_soc_floor_pct') | float(25) }}"
+          need: "{{ states('sensor.se_nf_needed_energy') | float(0) }}"
+          evcc: "{{ is_state('binary_sensor.se_nf_evcc_grid_charge_request','on') }}"
+          mode: "{{ states('input_select.se_nf_optimization_mode') }}"
+          lifetime_reached: "{{ is_state('input_boolean.se_nf_lifetime_target_reached','on') }}"
+          next_state: >-
+            {% if not enabled %}
+              closed
+            {% elif evcc %}
+              evcc_override
+            {% elif not cfg_ok or not sanity_ok %}
+              risk
+            {% elif soe | float(0) <= low | float(25) %}
+              low_soc
+            {% elif mode == 'Eigenverbrauch maximieren' %}
+              open
+            {% elif mode == 'Akku schonen' and lifetime_reached %}
+              done
+            {% elif valid_planned_open_today and end_grace_ts | int(0) > 0 and now_ts | int(0) <= end_grace_ts | int(0) %}
+              {% if need | float(0) <= 0.05 %}
+                battery_full_open
+              {% else %}
+                open
+              {% endif %}
+            {% elif valid_planned_open_today and end_grace_ts | int(0) > 0 and now_ts | int(0) > end_grace_ts | int(0) %}
+              done
+            {% elif planned_valid and planned_ts | int(0) > 0 and now_ts | int(0) >= planned_ts | int(0) %}
+              {% if need | float(0) <= 0.05 %}
+                battery_full_open
+              {% else %}
+                open
+              {% endif %}
+            {% elif planned_valid and planned_ts | int(0) > 0 %}
+              armed
+            {% elif candidate_ts | int(0) > 0 %}
+              armed
+            {% else %}
+              closed
+            {% endif %}
+      - condition: template
+        value_template: "{{ states('input_select.se_nf_session_state') != next_state | trim }}"
+      - service: input_select.select_option
+        target:
+          entity_id: input_select.se_nf_session_state
+        data:
+          option: "{{ next_state | trim }}"
+
+
+
+  - id: se_nf_v29_lifetime_latch_reset
+    alias: "SolarEdge: Netzdienlich V2.9 Lebensdauer Latch Reset"
+    mode: single
+    trigger:
+      - platform: time
+        at: "06:00:00"
+      - platform: homeassistant
+        event: start
+      - platform: state
+        entity_id:
+          - input_select.se_nf_optimization_mode
+    action:
+      - choose:
+          - conditions:
+              - condition: template
+                value_template: >-
+                  {{ trigger.platform == 'time'
+                     or states('input_select.se_nf_optimization_mode') != 'Akku schonen' }}
+            sequence:
+              - service: input_boolean.turn_off
+                target:
+                  entity_id: input_boolean.se_nf_lifetime_target_reached
+
+  - id: se_nf_v29_lifetime_target_latch
+    alias: "Speichermanagement: Akku schonen Ziel erreicht"
+    mode: single
+    trigger:
+      - platform: time_pattern
+        minutes: "/1"
+      - platform: state
+        entity_id:
+          - sensor.se_nf_battery_soe
+          - sensor.speicher_ziel_ladestand
+          - input_select.se_nf_session_state
+          - input_select.se_nf_optimization_mode
+    condition:
+      - condition: state
+        entity_id: input_boolean.se_netzdienlich_enabled
+        state: "on"
+      - condition: state
+        entity_id: input_select.se_nf_optimization_mode
+        state: "Akku schonen"
+      - condition: template
+        value_template: >-
+          {{ states('input_select.se_nf_session_state') in ['open','battery_full_open'] }}
+      - condition: template
+        value_template: >-
+          {{ states('sensor.se_nf_battery_soe') | float(0)
+             >= states('sensor.speicher_ziel_ladestand') | float(100) }}
+    action:
+      - service: input_boolean.turn_on
+        target:
+          entity_id: input_boolean.se_nf_lifetime_target_reached
+      - service: input_select.select_option
+        target:
+          entity_id: input_select.se_nf_session_state
+        data:
+          option: done
+
+
+  - id: se_nf_v28_single_writer
+    alias: "SolarEdge: Netzdienlich V2.8.9a Single Writer Safety Guard"
+    mode: single
+    max_exceeded: silent
+    trigger:
+      - platform: homeassistant
+        event: start
+      - platform: time_pattern
+        minutes: "/5"
+      - platform: state
+        entity_id:
+          - sensor.se_nf_desired_target
+          - input_select.se_nf_session_state
+          - input_select.se_nf_optimization_mode
+          - input_boolean.se_netzdienlich_enabled
+          - sensor.se_nf_config_check
+          - sensor.se_nf_sanity_check
+          - number.solaredge_i1_storage_charge_limit
+          - sensor.se_nf_charge_limit_actual
+    action:
+      - delay: >-
+          {% if trigger.platform == 'homeassistant' %}00:02:30{% else %}00:00:00{% endif %}
+      - variables:
+          debug: "{{ is_state('input_boolean.se_netzdienlich_debug','on') }}"
+          entity: "{{ states('input_text.se_nf_charge_limit_entity') | trim }}"
+          configured_entity: "{{ states('input_text.se_nf_charge_limit_entity') | trim }}"
+          target_w: "{{ states('sensor.se_nf_desired_target') | float(5000) }}"
+          current_w: "{{ states(entity) | float(999999) }}"
+          delta_w: "{{ (target_w | float(5000) - current_w | float(999999)) | abs }}"
+          min_delta_w: "{{ states('input_number.se_nf_write_min_delta_w') | float(100) }}"
+          cooldown_s: "{{ states('input_number.se_nf_write_cooldown_s') | int(600) }}"
+          lock_s: "{{ states('input_number.se_nf_write_lock_s') | int(60) }}"
+          last_write_ts: "{{ as_timestamp(states('input_datetime.se_nf_last_write'), 0) | int(0) }}"
+          now_ts: "{{ now().timestamp() | int(0) }}"
+          cooldown_ok: "{{ (now_ts | int(0) - last_write_ts | int(0)) >= cooldown_s | int(600) }}"
+          lock_active: "{{ is_state('binary_sensor.se_nf_write_lock_active','on') }}"
+          # V2.9.3h: Safety-Close + plausible Open
+          target_open_plausible: >-
+            {% set s = states('input_select.se_nf_session_state') %}
+            {% set start_ts = states('sensor.se_nf_active_planned_start_timestamp') | int(0) %}
+            {% set now_i = now().timestamp() | int(0) %}
+            {{ s in ['evcc_override','low_soc','risk']
+               or (s in ['open','battery_full_open'] and start_ts > 0 and now_i >= start_ts) }}
+          target_open_is_risk: >-
+            {{ is_state('input_select.se_nf_session_state','risk') }}
+          target_open_stable_s: >-
+            {{ (now().timestamp() | int(0)) -
+               (as_timestamp(states.input_select.se_nf_session_state.last_changed, 0) | int(0)) }}
+          target_open_allowed: >-
+            {{ target_open_plausible
+               and (
+                 not target_open_is_risk
+                 or target_open_stable_s | int(0) >= 90
+               ) }}
+          priority_open_write: >-
+            {{ target_w | float(0) >= 4750 and target_open_allowed }}
+          safety_close_write: >-
+            {{ target_w | float(0) <= 50 and current_w | float(0) > 50 }}
+          normal_write_window_ok: "{{ cooldown_ok and not lock_active }}"
+          write_allowed: >-
+            {{ states(entity) not in ['unknown','unavailable','none','']
+               and target_w | float(5000) >= 0
+               and target_w | float(5000) <= 5000
+               and current_w | float(999999) <= 5000
+               and delta_w | float(0) >= min_delta_w | float(100)
+               and (
+                    safety_close_write
+                    or priority_open_write
+                    or (normal_write_window_ok and (target_w | float(0) < 4750 or target_open_allowed))
+               ) }}
+      - if:
+          - condition: template
+            value_template: "{{ debug }}"
+        then:
+          - service: system_log.write
+            data:
+              level: info
+              message: >-
+                SE NF V2.8.9a Writer Check: state={{ states('input_select.se_nf_session_state') }},
+                target={{ target_w }}W, current={{ current_w }}W, delta={{ delta_w }}W,
+                configured_entity={{ configured_entity }}, fixed_entity={{ entity }},
+                priority_open={{ priority_open_write }},
+                cooldown_ok={{ cooldown_ok }}, lock_active={{ lock_active }},
+                allowed={{ write_allowed }}, reason={{ states('sensor.se_nf_decision_reason') }}
+      - condition: template
+        value_template: "{{ write_allowed }}"
+      - service: input_datetime.set_datetime
+        target:
+          entity_id: input_datetime.se_nf_last_write
+        data:
+          datetime: "{{ now().strftime('%Y-%m-%d %H:%M:%S') }}"
+      - service: input_datetime.set_datetime
+        target:
+          entity_id: input_datetime.se_nf_write_lock_until
+        data:
+          datetime: "{{ (now() + timedelta(seconds=lock_s | int(60))).strftime('%Y-%m-%d %H:%M:%S') }}"
+      - service: input_number.set_value
+        target:
+          entity_id: input_number.se_nf_last_applied_charge_limit_w
+        data:
+          value: "{{ target_w | float(5000) | round(0) }}"
+      - if:
+          - condition: template
+            value_template: >-
+              {% set s = states('input_select.se_nf_session_state') %}
+              {% set planned_ts = as_timestamp(states('input_datetime.se_nf_session_planned_start'), 0) | int(0) %}
+              {% set now_ts = now().timestamp() | int(0) %}
+              {{ target_w | float(0) >= 4750
+                 and s in ['open','battery_full_open']
+                 and planned_ts > 0
+                 and now_ts >= planned_ts }}
+        then:
+          - service: input_datetime.set_datetime
+            target:
+              entity_id: input_datetime.se_nf_last_open_write
+            data:
+              datetime: "{{ now().strftime('%Y-%m-%d %H:%M:%S') }}"
+      - service: number.set_value
+        data:
+          entity_id: >-
+            {{ entity | string | replace('"','') | replace("'",'') | replace('\\','') | trim }}
+          value: "{{ target_w | float(5000) | round(0) }}"
+      - if:
+          - condition: template
+            value_template: "{{ debug }}"
+        then:
+          - service: system_log.write
+            data:
+              level: info
+              message: "SE NF V2.8.9a Writer wrote {{ target_w }}W to {{ entity }}"
+
+  # >>> merged from solaredge_netzdienlich_v293c_lifetime_latch_repair.yaml
+  - id: se_nf_v293c_lifetime_latch_repair
+    alias: "SolarEdge: Netzdienlich V2.9.3c Lifetime Latch Repair"
+    mode: single
+    trigger:
+      - platform: time_pattern
+        minutes: "/1"
+      - platform: state
+        entity_id:
+          - input_boolean.se_nf_lifetime_target_reached
+          - input_select.se_nf_session_state
+          - sensor.se_nf_battery_soe
+          - sensor.speicher_ziel_ladestand
+          - sensor.se_nf_needed_energy
+          - sensor.se_nf_today_planned_start_candidate_timestamp
+          - sensor.se_nf_today_end_with_grace_timestamp
+
+    condition:
+      - condition: state
+        entity_id: input_boolean.se_nf_lifetime_latch_repair_enabled
+        state: "on"
+      - condition: state
+        entity_id: input_boolean.se_netzdienlich_enabled
+        state: "on"
+      - condition: state
+        entity_id: input_select.se_nf_optimization_mode
+        state: "Akku schonen"
+      - condition: state
+        entity_id: sensor.se_nf_config_check
+        state: "ok"
+      - condition: state
+        entity_id: sensor.se_nf_sanity_check
+        state: "ok"
+      - condition: state
+        entity_id: binary_sensor.se_nf_risk_flag
+        state: "off"
+
+    action:
+      - variables:
+          session: "{{ states('input_select.se_nf_session_state') }}"
+          latch_on: "{{ is_state('input_boolean.se_nf_lifetime_target_reached','on') }}"
+          soe: "{{ states('sensor.se_nf_battery_soe') | float(0) }}"
+          target: "{{ states('sensor.speicher_ziel_ladestand') | float(100) }}"
+          need: "{{ states('sensor.se_nf_needed_energy') | float(0) }}"
+          planned_ts: "{{ states('sensor.se_nf_today_planned_start_candidate_timestamp') | int(0) }}"
+          end_grace_ts: "{{ states('sensor.se_nf_today_end_with_grace_timestamp') | int(0) }}"
+          now_ts: "{{ as_timestamp(now()) | int(0) }}"
+          start_due: "{{ planned_ts | int(0) > 0 and planned_ts | int(0) <= now_ts | int(0) }}"
+          before_end: "{{ end_grace_ts | int(0) <= 0 or now_ts | int(0) <= end_grace_ts | int(0) }}"
+          latch_wrong: "{{ latch_on and soe | float(0) < (target | float(100) - 1.0) }}"
+          reopen_needed: >-
+            {{ session == 'done'
+               and need | float(0) > 0.10
+               and start_due
+               and before_end
+               and soe | float(0) < (target | float(100) - 1.0) }}
+
+      - choose:
+          - conditions:
+              - condition: template
+                value_template: "{{ latch_wrong }}"
+            sequence:
+              - service: input_boolean.turn_off
+                target:
+                  entity_id: input_boolean.se_nf_lifetime_target_reached
+
+      - choose:
+          - conditions:
+              - condition: template
+                value_template: "{{ reopen_needed }}"
+            sequence:
+              - service: input_select.select_option
+                target:
+                  entity_id: input_select.se_nf_session_state
+                data:
+                  option: "armed"
+  # <<< merged from solaredge_netzdienlich_v293c_lifetime_latch_repair.yaml
+
+  # >>> merged from solaredge_netzdienlich_v293g_critical_deficit_daily_latch.yaml
+  - id: se_nf_v293g_critical_deficit_daily_latch
+    alias: "SolarEdge: Netzdienlich V2.9.3h Critical Deficit Daily Latch"
+    mode: single
+    trigger:
+      - platform: time_pattern
+        minutes: "/2"
+      - platform: state
+        entity_id:
+          - input_boolean.se_netzdienlich_enabled
+          - input_select.se_nf_session_state
+          - sensor.se_nf_needed_energy
+          - sensor.se_nf_available_pv_for_battery_today
+          - sensor.se_nf_live_battery_pv_margin
+          - sensor.se_nf_live_pv_forecast_now
+          - sensor.se_nf_remaining_pv_today
+          - sensor.se_nf_sanity_check
+          - sensor.se_nf_config_check
+          - binary_sensor.se_nf_risk_flag
+          - binary_sensor.se_nf_evcc_grid_charge_request
+    condition:
+      - condition: state
+        entity_id: input_boolean.se_netzdienlich_enabled
+        state: "on"
+      # V2.9.3g1a: Critical-Latch nur im heutigen Planungsfenster
+      - condition: template
+        value_template: >-
+          {% set now_ts = now().timestamp() | int(0) %}
+          {% set day_start_ts = as_timestamp(today_at('06:00:00'), 0) | int(0) %}
+          {% set end_grace_ts = states('sensor.se_nf_today_end_with_grace_timestamp') | int(0) %}
+          {{ now_ts >= day_start_ts and (end_grace_ts <= 0 or now_ts <= end_grace_ts) }}
+      - condition: template
+        value_template: "{{ states('input_select.se_nf_session_state') in ['closed','armed'] }}"
+      - condition: state
+        entity_id: sensor.se_nf_sanity_check
+        state: "ok"
+      - condition: state
+        entity_id: sensor.se_nf_config_check
+        state: "ok"
+      - condition: state
+        entity_id: binary_sensor.se_nf_risk_flag
+        state: "off"
+      - condition: state
+        entity_id: binary_sensor.se_nf_evcc_grid_charge_request
+        state: "off"
+      - condition: state
+        entity_id: input_boolean.se_nf_critical_deficit_latched_today
+        state: "off"
+      - condition: template
+        alias: "V2.9.3h Guard: Critical Deficit nur bei echtem Defizit"
+        value_template: >-
+          {% set soe = states('sensor.solaredge_i1_b1_state_of_energy') | float(0) %}
+          {% set reserve = states('number.solaredge_i1_backup_reserve') | float(0) %}
+          {% set need = states('sensor.se_nf_needed_energy') | float(0) %}
+          {% set pv_for_akku = states('sensor.se_nf_available_pv_for_battery_today') | float(99) %}
+          {# V2.9.5: Legacy-Effective-Sensoren entfernt; aktuelle PV-Pufferlogik ist Quelle #}
+          {% set effective_pv = pv_for_akku %}
+          {% set delta = effective_pv - need %}
+          {% set margin = states('sensor.se_nf_live_battery_pv_margin') | float(99) %}
+          {% set remaining = states('sensor.se_nf_remaining_pv_today') | float(0) %}
+          {% set forecast_now = states('sensor.se_nf_live_pv_forecast_now') | float(0) %}
+          {% set coverage = states('sensor.se_nf_coverage_ratio') | float(0) %}
+          {% set good_day = coverage >= 1.2 and pv_for_akku >= need %}
+          {% set pv_now = states('sensor.se_nf_live_pv_actual_now') | float(0) %}
+          {% set cons_now = states('sensor.se_nf_live_consumption_power_now') | float(0) %}
+          {% set surplus_now = pv_now - cons_now %}
+          {% set early_def = states('input_number.se_nf_early_open_deficit_kwh') | float(0.5) %}
+          {% set real_deficit = [need - effective_pv, 0] | max %}
+          {% set min_deficit = [early_def, 0.5] | max %}
+          {% set soc_limit = [reserve + 12, 35] | max %}
+          
+          {{
+            need >= 2.0
+            and soe <= soc_limit
+            and not good_day
+            and remaining > 1.0
+            and forecast_now >= 100
+            and real_deficit >= min_deficit
+            and delta < -0.5
+            and surplus_now < 500
+            and (margin <= -3.0 or pv_for_akku < (need * 0.50))
+          }}
+      - condition: template
+        value_template: >-
+          {{ true }}
+    action:
+      - service: input_boolean.turn_on
+        target:
+          entity_id: input_boolean.se_nf_critical_deficit_latched_today
+      - service: input_datetime.set_datetime
+        target:
+          entity_id: input_datetime.se_nf_session_planned_start
+        data:
+          datetime: "{{ now().strftime('%Y-%m-%d %H:%M:%S') }}"
+      - service: system_log.write
+        data:
+          level: warning
+          message: >-
+            SE NF V2.9.3h Critical Deficit: Tages-Latch gesetzt und geplanter Start einmalig auf jetzt gesetzt.
+
+  - id: se_nf_v293g_critical_deficit_daily_latch_reset
+    alias: "SolarEdge: Netzdienlich V2.9.3h Critical Deficit Daily Latch Reset"
+    mode: single
+    trigger:
+      - platform: time
+        at: "05:30:00"
+      - platform: homeassistant
+        event: start
+    condition:
+      - condition: template
+        value_template: >-
+          {% set planned_ts = as_timestamp(states('input_datetime.se_nf_session_planned_start'), 0) | int(0) %}
+          {% set day_start_ts = as_timestamp(today_at('06:00:00'), 0) | int(0) %}
+          {{ planned_ts <= 0 or planned_ts < day_start_ts }}
+    # V2.9.3g2: Duplicate condition entfernt; obige Bedingung bleibt aktiv
+    action:
+      - service: input_boolean.turn_off
+        target:
+          entity_id: input_boolean.se_nf_critical_deficit_latched_today
+  # <<< merged from solaredge_netzdienlich_v293g_critical_deficit_daily_latch.yaml
+
+# >>> merged new top-level section: command_line
+command_line:
+  # >>> merged from solaredge_netzdienlich_v293e_sql_cached_forecast.yaml
+  - sensor:
+      name: "SE NF Load Forecast 7d Cached"
+      unique_id: se_nf_load_forecast_7d_cached
+      command: >-
+          python3 /config/se_nf_load_forecast_7d_cached.py
+          --db "{{ states('input_text.se_nf_sql_db_path') | trim }}"
+          --entity "{{ states('input_text.se_nf_daily_consumption_entity') | trim }}"
+      command_timeout: 30
+      scan_interval: 86400
+      unit_of_measurement: "kWh"
+      value_template: "{{ value_json.remaining | float(0) }}"
+      json_attributes:
+        - until_now
+        - avg_day_total
+        - min_remaining
+        - max_remaining
+        - days
+        - samples_total
+        - valid
+        - source
+        - duration_ms
+        - error
+  # <<< merged from solaredge_netzdienlich_v293e_sql_cached_forecast.yaml
+# <<< merged new top-level section: command_line
+
+utility_meter:
+
+  # >>> merged from se_nf_pv_actual_today_utility_meter.yaml
+  se_nf_pv_actual_today_meter:
+    source: sensor.se_nf_pv_actual_meter_source_energy
+    cycle: daily
+  # <<< merged from se_nf_pv_actual_today_utility_meter.yaml
