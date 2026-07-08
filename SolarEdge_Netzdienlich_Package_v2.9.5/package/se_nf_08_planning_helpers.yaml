@@ -1,0 +1,41 @@
+# =========================================================
+# SE NF Planning Helpers
+# Ergänzende Helfer für Planungs-/Early-Open-Logik
+# Release-Fix v2.9.5
+# =========================================================
+
+input_number:
+  se_nf_early_open_deficit_kwh:
+    name: "Netzdienlich: Frühe Freigabe Defizit (kWh)"
+    min: 0.2
+    max: 5.0
+    step: 0.1
+    unit_of_measurement: "kWh"
+    mode: slider
+    icon: mdi:battery-minus-outline
+
+input_text:
+  se_nf_live_consumption_power_entities:
+    name: "Netzdienlich: Live-Verbrauch Leistung Sensoren"
+    initial: "sensor.power_consumption"
+    max: 255
+    icon: mdi:home-lightning-bolt-outline
+
+template:
+  - sensor:
+      - name: "SE NF Live Consumption Power Now"
+        unique_id: se_nf_live_consumption_power_now
+        unit_of_measurement: "W"
+        device_class: power
+        icon: mdi:home-lightning-bolt-outline
+        state: >-
+          {% set bad = ['unknown','unavailable','none','None',''] %}
+          {% set candidates = states('input_text.se_nf_live_consumption_power_entities').split(',') %}
+          {% set ns = namespace(v=0) %}
+          {% for eid in candidates %}
+            {% set e = eid | trim %}
+            {% if ns.v == 0 and e not in bad and states(e) not in bad %}
+              {% set ns.v = states(e) | float(0) %}
+            {% endif %}
+          {% endfor %}
+          {{ ns.v | round(0) }}
