@@ -1,8 +1,0 @@
-Tag:
-v2.9.5
-
-Release title:
-SolarEdge Netzdienlich Package v2.9.5
-
-Primary asset:
-SolarEdge_Netzdienlich_Package_v2.9.5.zip
