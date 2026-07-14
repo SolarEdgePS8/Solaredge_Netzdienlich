@@ -1,3 +1,13 @@
+# V2.9.6 Portability/Modbus Robustness
+# - Charge- und Discharge-Limit werden über Mapping-Helfer angesprochen
+# - Close-Bypass nutzt internen Actual-Sensor statt harter Entity-ID
+# - Master AUS schreibt nur bei echter Abweichung und verhindert überlappende Läufe
+
+input_text:
+  se_nf_discharge_limit_entity:
+    name: "Netzdienlich: SolarEdge Discharge-Limit Entity optional"
+    icon: mdi:battery-arrow-down-outline
+    max: 255
 automation:
   # ============================================================
   # SE NF V2.9.4a
@@ -9,8 +19,9 @@ automation:
   # - Session geschlossen
   # ============================================================
   - id: se_nf_v294a_master_off_defaults
-    alias: "SolarEdge: Netzdienlich V2.9.4a Master AUS Defaults"
-    mode: restart
+    alias: "SolarEdge: Netzdienlich V2.9.6 Master AUS Defaults"
+    mode: single
+    max_exceeded: silent
     trigger:
       - platform: state
         entity_id: input_boolean.se_netzdienlich_enabled
@@ -26,13 +37,26 @@ automation:
     action:
       - variables:
           charge_entity: "{{ states('input_text.se_nf_charge_limit_entity') | trim }}"
-          discharge_entity: "number.solaredge_i1_storage_discharge_limit"
+          discharge_entity: "{{ states('input_text.se_nf_discharge_limit_entity') | trim }}"
           default_w: 5000
+          min_delta_w: "{{ states('input_number.se_nf_write_min_delta_w') | float(100) }}"
           charge_valid: >-
             {{ charge_entity not in ['unknown','unavailable','none','']
                and states(charge_entity) not in ['unknown','unavailable','none',''] }}
           discharge_valid: >-
-            {{ states(discharge_entity) not in ['unknown','unavailable','none',''] }}
+            {{ discharge_entity not in ['unknown','unavailable','none','']
+               and states(discharge_entity) not in ['unknown','unavailable','none',''] }}
+          charge_current: "{{ states(charge_entity) | float(default_w) }}"
+          discharge_current: "{{ states(discharge_entity) | float(default_w) }}"
+          charge_needs_reset: >-
+            {{ charge_valid
+               and ((((charge_current | float(default_w)) - (default_w | float(5000))) | abs)
+                    >= (min_delta_w | float(100))) }}
+          discharge_needs_reset: >-
+            {{ discharge_valid
+               and ((((discharge_current | float(default_w)) - (default_w | float(5000))) | abs)
+                    >= (min_delta_w | float(100))) }}
+          reset_needed: "{{ charge_needs_reset or discharge_needs_reset }}"
 
       - service: input_boolean.turn_off
         target:
@@ -48,7 +72,7 @@ automation:
 
       - if:
           - condition: template
-            value_template: "{{ charge_valid }}"
+            value_template: "{{ charge_needs_reset }}"
         then:
           - service: number.set_value
             data:
@@ -57,12 +81,15 @@ automation:
 
       - if:
           - condition: template
-            value_template: "{{ discharge_valid }}"
+            value_template: "{{ discharge_needs_reset }}"
         then:
           - service: number.set_value
             data:
               entity_id: "{{ discharge_entity }}"
               value: "{{ default_w }}"
+
+      - condition: template
+        value_template: "{{ reset_needed }}"
 
       - service: input_datetime.set_datetime
         target:
@@ -74,7 +101,7 @@ automation:
         data:
           level: warning
           message: >-
-            SE NF V2.9.4a Master AUS Defaults: Charge/Discharge Limits auf 5000 W zurückgesetzt.
+            SE NF V2.9.6 Master AUS Defaults: Nur abweichende, gültig gemappte Charge-/Discharge-Limits wurden auf 5000 W zurückgesetzt.
 
   # ============================================================
   # SE NF V2.9.4b
@@ -94,7 +121,7 @@ automation:
           - sensor.se_nf_charge_limit_target
           - sensor.se_nf_desired_target
           - sensor.se_nf_writer_mode
-          - number.solaredge_i1_storage_charge_limit
+          - sensor.se_nf_charge_limit_actual
       - platform: time_pattern
         minutes: "/1"
 
@@ -106,7 +133,7 @@ automation:
       - condition: template
         value_template: >-
           {% set target = states('sensor.se_nf_charge_limit_target') | float(states('sensor.se_nf_desired_target') | float(5000)) %}
-          {% set actual = states('number.solaredge_i1_storage_charge_limit') | float(0) %}
+          {% set actual = states('sensor.se_nf_charge_limit_actual') | float(0) %}
           {% set mode = states('sensor.se_nf_writer_mode') %}
           {{
             target <= 100
@@ -116,9 +143,8 @@ automation:
 
     action:
       - service: number.set_value
-        target:
-          entity_id: number.solaredge_i1_storage_charge_limit
         data:
+          entity_id: "{{ states('input_text.se_nf_charge_limit_entity') | trim }}"
           value: 0
 
       - service: input_datetime.set_datetime

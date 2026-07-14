@@ -1,0 +1,21 @@
+{
+  "version": "v2.9.6",
+  "validation_type": "sanitized_public_release_summary",
+  "gates": {
+    "GATE_STATIC_MAIN_CRITICAL": "PASS",
+    "critical_main": 0,
+    "GATE_RUNTIME": "PASS",
+    "runtime_fail_count": 0,
+    "GATE_MANIFEST": "PASS_OR_EXTERNAL_REVIEW",
+    "critical_internal": 0,
+    "missing_files": 0,
+    "legacy_hits": 0,
+    "duplicate_unique_ids": 0
+  },
+  "issues_addressed": {
+    "1": "last_reported freshness handling, 1800-second default and clearer first-run documentation",
+    "2": "writer bookkeeping after successful write, mapped entities and reduced redundant Master-OFF writes",
+    "3": "clear mapping documentation and zero-watt-safe fallback resolvers"
+  },
+  "privacy_note": "Instance-specific entity states, timestamps, energy values and local audit reports are intentionally not included in the public release."
+}

@@ -1,3 +1,8 @@
+# V2.9.6 Portability/Robustness
+# - Sensoralter nutzt last_reported mit last_updated-Fallback
+# - Writer-Bookkeeping erst nach erfolgreichem SolarEdge-Write
+# - harter SolarEdge-Trigger aus dem portablen Writer entfernt
+# - Fallback-Resolver akzeptieren 0 W als gültigen ersten Wert
 # V3.0-rc3 portable entity mappings
 # V3.0-rc4 integration portability
 # V3.0-rc3d remaining candidate lists mapped
@@ -458,7 +463,6 @@ input_number:
     step: 50
     mode: box
     unit_of_measurement: "W"
-    initial: 5000
 
   # >>> merged from solaredge_speicher_user_settings.yaml
   se_nf_battery_capacity_kwh_manual:
@@ -2021,7 +2025,7 @@ template:
           {% set cap = states('sensor.se_nf_battery_capacity_kwh') %}
           {% set soe_age = states('sensor.se_nf_soe_age_s') | int(0) %}
           {% set limit_age = states('sensor.se_nf_charge_limit_age_s') | int(0) %}
-          {% set max_age = states('input_number.se_nf_max_sensor_age_s') | int(14400) %}
+          {% set max_age = states('input_number.se_nf_max_sensor_age_s') | int(1800) %}
           {% if charge != charge_expected %}
             charge_limit_entity_not_allowed
           {% elif states(charge_expected) in ['unknown','unavailable','none',''] %}
@@ -2046,7 +2050,7 @@ template:
           charge_limit_configured: "{{ states('input_text.se_nf_charge_limit_entity') | trim }}"
           soe_age_s: "{{ states('sensor.se_nf_soe_age_s') }}"
           charge_limit_age_s: "{{ states('sensor.se_nf_charge_limit_age_s') }}"
-          max_age_s: "{{ states('input_number.se_nf_max_sensor_age_s') | int(14400) }}"
+          max_age_s: "{{ states('input_number.se_nf_max_sensor_age_s') | int(1800) }}"
       - name: "SE NF Writer Mode"
         unique_id: se_nf_writer_mode
         icon: mdi:pencil-ruler
@@ -2155,7 +2159,7 @@ template:
           {% set start_ts = states('sensor.se_nf_active_planned_start_timestamp') | int(0) %}
           {% set start = start_ts | timestamp_custom('%H:%M', true) if start_ts > 0 else 'unbekannt' %}
           {% if not enabled %}
-            Deaktiviert · fail-open
+            Deaktiviert · Ladebegrenzung freigegeben (Fail-open)
           {% elif cfg != 'ok' %}
             Config {{ cfg }} · fail-open
           {% elif sanity != 'ok' %}
@@ -2256,7 +2260,8 @@ template:
         state: >-
           {% set e = states('input_text.se_nf_battery_soe_entity') | trim %}
           {% if e and states[e] is defined and states(e) not in ['unknown','unavailable','none',''] %}
-            {{ (now().timestamp() - as_timestamp(states[e].last_updated, 0)) | int(999999) }}
+            {% set stamp = states[e].last_reported if states[e].last_reported is defined else states[e].last_updated %}
+            {{ (now().timestamp() - as_timestamp(stamp, 0)) | int(999999) }}
           {% else %}
             999999
           {% endif %}
@@ -2268,7 +2273,8 @@ template:
         state: >-
           {% set e = states('input_text.se_nf_charge_limit_entity') | trim %}
           {% if states[e] is defined and states(e) not in ['unknown','unavailable','none',''] %}
-            {{ (now().timestamp() - as_timestamp(states[e].last_updated, 0)) | int(999999) }}
+            {% set stamp = states[e].last_reported if states[e].last_reported is defined else states[e].last_updated %}
+            {{ (now().timestamp() - as_timestamp(stamp, 0)) | int(999999) }}
           {% else %}
             999999
           {% endif %}
@@ -2616,10 +2622,11 @@ template:
           {% set bad = ['unknown','unavailable','none','None',''] %}
           {% set configured = states('input_text.se_nf_forecast_now_entity') | trim %}
             {% set candidates = [configured, 'sensor.pv_prognose_leistung_jetzt_biased_interpoliert', 'sensor.evcc_forecast_solar'] %}
-          {% set ns = namespace(v=0) %}
+          {% set ns = namespace(found=false, v=0) %}
           {% for eid in candidates %}
-            {% if ns.v == 0 and states(eid) not in bad %}
+            {% if not ns.found and states(eid) not in bad %}
               {% set ns.v = states(eid) | float(0) %}
+              {% set ns.found = true %}
             {% endif %}
           {% endfor %}
           {{ ns.v | round(0) }}
@@ -2631,10 +2638,11 @@ template:
         state: >-
           {% set bad = ['unknown','unavailable','none','None',''] %}
           {% set candidates = states('input_text.se_nf_live_pv_power_entities').split(',') %}
-          {% set ns = namespace(v=0) %}
+          {% set ns = namespace(found=false, v=0) %}
           {% for eid in candidates %}
-            {% if ns.v == 0 and states(eid) not in bad %}
+            {% if not ns.found and states(eid) not in bad %}
               {% set ns.v = states(eid) | float(0) %}
+              {% set ns.found = true %}
             {% endif %}
           {% endfor %}
           {{ ns.v | round(0) }}
@@ -3118,7 +3126,6 @@ automation:
           - input_boolean.se_netzdienlich_enabled
           - sensor.se_nf_config_check
           - sensor.se_nf_sanity_check
-          - number.solaredge_i1_storage_charge_limit
           - sensor.se_nf_charge_limit_actual
     action:
       - delay: >-
@@ -3187,6 +3194,12 @@ automation:
                 allowed={{ write_allowed }}, reason={{ states('sensor.se_nf_decision_reason') }}
       - condition: template
         value_template: "{{ write_allowed }}"
+      # V2.9.6: Erst SolarEdge schreiben; Bookkeeping nur nach erfolgreichem Service-Call.
+      - service: number.set_value
+        data:
+          entity_id: >-
+            {{ entity | string | replace('"','') | replace("'",'') | replace('\\','') | trim }}
+          value: "{{ target_w | float(5000) | round(0) }}"
       - service: input_datetime.set_datetime
         target:
           entity_id: input_datetime.se_nf_last_write
@@ -3218,11 +3231,6 @@ automation:
               entity_id: input_datetime.se_nf_last_open_write
             data:
               datetime: "{{ now().strftime('%Y-%m-%d %H:%M:%S') }}"
-      - service: number.set_value
-        data:
-          entity_id: >-
-            {{ entity | string | replace('"','') | replace("'",'') | replace('\\','') | trim }}
-          value: "{{ target_w | float(5000) | round(0) }}"
       - if:
           - condition: template
             value_template: "{{ debug }}"

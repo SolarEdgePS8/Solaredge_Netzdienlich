@@ -1,3 +1,5 @@
+# V2.9.6 Portability
+# Kein initial-Wert für lokale Entity-Mappings; Werte werden restauriert bzw. einmalig konfiguriert.
 # =========================================================
 # SE NF Planning Helpers
 # Ergänzende Helfer für Planungs-/Early-Open-Logik
@@ -17,7 +19,6 @@ input_number:
 input_text:
   se_nf_live_consumption_power_entities:
     name: "Netzdienlich: Live-Verbrauch Leistung Sensoren"
-    initial: "sensor.power_consumption"
     max: 255
     icon: mdi:home-lightning-bolt-outline
 
@@ -31,11 +32,12 @@ template:
         state: >-
           {% set bad = ['unknown','unavailable','none','None',''] %}
           {% set candidates = states('input_text.se_nf_live_consumption_power_entities').split(',') %}
-          {% set ns = namespace(v=0) %}
+          {% set ns = namespace(found=false, v=0) %}
           {% for eid in candidates %}
             {% set e = eid | trim %}
-            {% if ns.v == 0 and e not in bad and states(e) not in bad %}
+            {% if not ns.found and e not in bad and states(e) not in bad %}
               {% set ns.v = states(e) | float(0) %}
+              {% set ns.found = true %}
             {% endif %}
           {% endfor %}
           {{ ns.v | round(0) }}

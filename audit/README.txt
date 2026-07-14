@@ -1,13 +1,13 @@
-SE NF Release Audit v2.9.5
+SE NF Release Audit v2.9.6
 
 1) Read-only Audit:
-   /share/se_nf_release_audit_v295/run_readonly.sh
+   /share/se_nf_release_audit_v296/run_readonly.sh
 
 2) Safe Functional A/B Tests:
-   /share/se_nf_release_audit_v295/run_safe_ab.sh
+   /share/se_nf_release_audit_v296/run_safe_ab.sh
 
 3) Alles zusammen:
-   /share/se_nf_release_audit_v295/run_all.sh
+   /share/se_nf_release_audit_v296/run_all.sh
 
 Reports:
    /share/se_nf_release_audit_reports/<timestamp>/

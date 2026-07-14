@@ -1,99 +1,88 @@
-# SolarEdge Netzdienlich Package v2.9.5
+# SolarEdge Netzdienlich Package v2.9.6
 
-Home-Assistant-Package zur netzdienlichen SolarEdge-Speichersteuerung mit Planungslogik, Wettergewichtung, PV-/Verbrauchsprognose, Akku-Schonen-Modus, Safety-/Writer-Logik und integrierter Release-Audit-Suite.
+Home-Assistant-Package zur planbaren und netzdienlichen Steuerung eines SolarEdge-Speichers.
 
-Dieses Release ist als **portierbares Package-Bundle** gedacht. Es ist **kein HACS-Addon** und **keine Custom Integration**, sondern eine Sammlung von Home-Assistant-Package-Dateien für `/config/packages`.
+Dieses Repository ist ein **Home-Assistant-Package-Bundle**. Es ist keine HACS-Integration. Vor der Aktivierung müssen die Entity-Zuordnungen der jeweiligen Home-Assistant-Instanz eingerichtet und geprüft werden.
 
-## Ziel
+## Die zwei wichtigsten Anleitungen
 
-Das Package soll den SolarEdge-Speicher nicht einfach immer sofort laden, sondern den Ladezeitpunkt anhand von Bedarf, PV-Prognose, Wetter, Akku-SoC, Ziel-SoC und Sicherheitsgrenzen planen.
+- **Neue Installation:** [`docs/01_FIRST_INSTALL.md`](docs/01_FIRST_INSTALL.md)
+- **Update einer bestehenden Installation:** [`docs/02_UPDATE_EXISTING.md`](docs/02_UPDATE_EXISTING.md)
 
-Es kann insbesondere helfen bei:
+Damit gibt es nicht mehr mehrere konkurrierende Installationsanleitungen.
 
-- netzdienlicher Speichersteuerung
-- später oder früher geplanter Speicherladung
-- Akku-Schonen-Betrieb
-- Wetter-basierter Startzeitkorrektur
-- Vermeidung unnötiger Speicherladung
-- Write-Safety gegen zu häufige oder falsche SolarEdge-Schreibbefehle
-- Diagnose und Release-Audit vor produktiver Nutzung
-
-## Enthaltene Struktur
+## Struktur
 
 ```text
-package/
-  solaredge_netzdienlich.yaml
-  se_nf_07_writer_safety.yaml
-  se_nf_08_planning_helpers.yaml
-  se_nf_09_lifetime_target_helpers.yaml
-
-audit/
-  se_nf_release_audit.py
-  se_nf_manifest_audit.py
-  run_readonly.sh
-  run_safe_ab.sh
-  run_all.sh
-  README.txt
-
-docs/
-  INSTALL.md
-  PORTING.md
-  ENTITY_MAPPING.md
-  FUNCTIONAL_OVERVIEW.md
-  SAFETY_AND_WRITER.md
-  AUDIT_SUITE.md
-  TROUBLESHOOTING.md
-  TEST_PROTOCOL_v2.9.5.md
-  UPGRADE_FROM_OLDER_RELEASES.md
-
-github/
-  RELEASE_BODY_v2.9.5.md
-  TAG_AND_TITLE.txt
-  CHECKLIST_BEFORE_PUBLISH.md
-
-examples/
-  configuration_yaml_packages.md
-  first_run_checks.sh
-
-scripts/
-  install_package_files.sh
-  run_first_checks.sh
-
-validation/
-  RELEASE_GATE_SUMMARY.md
-  BUNDLE_FILE_HASHES_SHA256.txt
+package/      vier Home-Assistant-Package-Dateien
+config/       Vorlage für die einmalige Konfiguration einer neuen Instanz
+scripts/      Installation, Konfiguration, Discovery und erster Check
+audit/        Read-only-, Manifest- und optionaler Safe-A/B-Test
+docs/         sechs fortlaufend nummerierte Anleitungen
+validation/   anonymisierte Release-Gates, Datenschutzhinweis und Datei-Hashes
+github/       Release-Text und Veröffentlichungscheckliste
 ```
 
-## Wichtiges Sicherheitsprinzip
+## Neue Home-Assistant-Instanz
 
-Das Package kann SolarEdge-Setpoints schreiben, wenn es aktiv ist.
+Kurzablauf:
 
-Vor produktiver Aktivierung müssen daher zwingend geprüft werden:
+1. Repository klonen oder ZIP entpacken.
+2. `scripts/install_package.sh` ausführen.
+3. Home Assistant prüfen und neu starten.
+4. `config/site_config.env.example` nach `config/site_config.env` kopieren.
+5. Eigene Entity-IDs und Parameter eintragen.
+6. `SITE_CONFIG_CONFIRMED=YES` setzen.
+7. `scripts/apply_site_config.sh` ausführen.
+8. Read-only-Audit ausführen.
+9. Master-Schalter erst danach aktivieren.
 
-- korrekte SolarEdge Charge-Limit-Entity
-- korrekte Akku-SoE-Entity
-- korrekte Backup-Reserve-Entity
-- lokale PV-Ist-Leistung
-- lokale Verbrauchsleistung
-- Wetter-Entity
-- PV-Prognose-Entities
-- `sensor.se_nf_config_check = ok`
-- `sensor.se_nf_sanity_check = ok`
+## Warum ist eine Site-Konfiguration nötig?
 
-## Minimaler Ablauf für neue Installationen
+Entity-Namen unterscheiden sich zwischen Home-Assistant-Instanzen. Das Package darf nicht an Namen wie `sensor.power_solar_generation` oder `weather.ps8` gebunden sein. Die lokale Instanz teilt dem Package deshalb über `input_text.se_nf_*` mit, welche Sensoren es verwenden soll.
 
-1. Dateien aus `package/` nach `/config/packages/` kopieren.
-2. Packages in `configuration.yaml` aktivieren.
-3. `ha core check` ausführen.
-4. Home Assistant neu starten.
-5. Master-Schalter zunächst aus lassen.
-6. Entity-Mappings anpassen.
-7. Read-only-Audit ausführen.
-8. Erst nach erfolgreichem Audit produktiv aktivieren.
+## PV-Ist-Leistung einfach erklärt
 
-## Release-Gates v2.9.5
+Der Helfer lautet:
 
-Letzter geprüfter Stand:
+```text
+input_text.se_nf_live_pv_power_entities
+```
+
+Hier gehört mindestens ein Sensor für die **aktuelle PV-Leistung in Watt** hinein.
+
+Beispiel:
+
+```text
+sensor.meine_pv_leistung
+```
+
+Mehrere Einträge sind als Fallback-Liste möglich:
+
+```text
+sensor.meine_pv_leistung,sensor.meine_pv_leistung_gefiltert,sensor.mein_wechselrichter_ac_power
+```
+
+`_filtered` ist keine Pflicht. Es bezeichnet lediglich einen optional geglätteten Sensor. Das Package nimmt den ersten gültigen Sensor der Liste. Energiezähler in `kWh` sind an dieser Stelle falsch.
+
+## Sicherheit
+
+Der Master-Schalter bleibt bei einer neuen Installation zunächst aus:
+
+```text
+input_boolean.se_netzdienlich_enabled = off
+```
+
+Vor der Aktivierung müssen mindestens gelten:
+
+```text
+sensor.se_nf_config_check = ok
+sensor.se_nf_sanity_check = ok
+```
+
+`writer_mode = normal` kann ebenfalls ein gültiger Ruhezustand sein. Entscheidend sind plausible Ziel-/Istwerte und grüne Config-/Sanity-Checks.
+
+## Release-Gates
 
 ```text
 GATE_STATIC_MAIN_CRITICAL: PASS
@@ -103,5 +92,3 @@ runtime_fail_count: 0
 GATE_MANIFEST: PASS_OR_EXTERNAL_REVIEW
 critical_internal: 0
 ```
-
-`PASS_OR_EXTERNAL_REVIEW` ist korrekt, weil SolarEdge-Entities und lokale Mapping-Entities auf jeder Home-Assistant-Instanz individuell geprüft werden müssen.
