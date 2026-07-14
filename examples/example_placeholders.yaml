@@ -1,5 +1,0 @@
-# Beispiel mit Platzhaltern
-solaredge_host: 192.168.x.x
-evcc_host: 192.168.x.x
-api_token: YOUR_TOKEN_HERE
-serial_number: YOUR_SERIAL_HERE

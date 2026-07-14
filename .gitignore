@@ -1,0 +1,7 @@
+*.bak
+*.tmp
+*.pyc
+__pycache__/
+config/site_config.env
+validation/audit_reports_snapshot/
+.DS_Store
