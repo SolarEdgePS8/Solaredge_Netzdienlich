@@ -1,0 +1,268 @@
+type: vertical-stack
+cards:
+  - type: markdown
+    title: SolarEdge Netzdienlich
+    content: |-
+      {% set bad = ['unknown', 'unavailable', 'none', 'None', ''] %}
+      {% set state = states('input_select.se_nf_session_state') %}
+      {% set mode = states('sensor.se_nf_optimization_mode_effective') %}
+      {% set target = states('sensor.se_nf_desired_target') %}
+      {% set actual = states('sensor.se_nf_charge_limit_actual') %}
+      {% set today = states('sensor.se_nf_today_charge_window') %}
+      {% set tomorrow = states('sensor.se_nf_tomorrow_charge_window') %}
+      {% set reason = states('sensor.se_nf_decision_reason') %}
+      {% set soe = states('sensor.se_nf_battery_soe') %}
+      {% set effective_target = states('sensor.speicher_ziel_ladestand') %}
+      {% if effective_target in bad %}
+        {% set effective_target = states('input_number.se_nf_target_soc_pct') %}
+      {% endif %}
+
+      {% if is_state('binary_sensor.se_nf_risk_flag', 'on') %}
+      ## ⚠️ Schutzmodus aktiv
+      Die Steuerung hat einen unplausiblen oder unvollständigen Zustand erkannt.
+      {% elif state in ['open', 'battery_full_open'] %}
+      ## ☀️ Laden ist freigegeben
+      Der Speicher darf entsprechend der aktuellen Strategie laden.
+      {% elif state == 'armed' %}
+      ## 🕒 Laden ist geplant
+      Der Speicher bleibt bis zum berechneten Start zurückgehalten.
+      {% elif state == 'done' %}
+      ## ✅ Tagesfenster erledigt
+      Das heutige reguläre Ladefenster ist abgeschlossen.
+      {% elif state == 'risk' %}
+      ## ⚠️ Sicherheitsmodus
+      Bitte Config Check, Sanity Check und Risiko-Sensor prüfen.
+      {% else %}
+      ## 🌤️ Warten auf Ladefenster
+      Aktuell ist keine Ladefreigabe aktiv.
+      {% endif %}
+
+      **Strategie:** {{ mode }}  
+      **Akku:** {{ soe }} % · **Ziel:** {{ effective_target }} %  
+      **Heute:** {{ today }}  
+      **Morgen:** {{ tomorrow }}  
+      **Soll:** {{ target }} W · **Ist:** {{ actual }} W  
+
+      {{ reason }}
+
+  - type: entities
+    title: Status & Steuerung
+    show_header_toggle: false
+    state_color: true
+    entities:
+      - entity: input_boolean.se_netzdienlich_enabled
+        name: Automatik aktiv
+      - entity: input_select.se_nf_optimization_mode
+        name: Gewählte Speicherstrategie
+      - entity: sensor.se_nf_optimization_mode_effective
+        name: Effektive Speicherstrategie
+      - entity: input_select.se_nf_session_state
+        name: Session-Status
+      - type: divider
+      - entity: sensor.se_nf_config_check
+        name: Config Check
+      - entity: sensor.se_nf_sanity_check
+        name: Sanity Check
+      - entity: binary_sensor.se_nf_risk_flag
+        name: Schutzmodus
+      - type: divider
+      - entity: sensor.se_nf_battery_soe
+        name: Akku-Stand
+      - entity: sensor.se_nf_needed_energy
+        name: Benötigte Energie
+      - entity: sensor.se_nf_desired_target
+        name: Gewünschtes Lade-Limit
+      - entity: sensor.se_nf_charge_limit_actual
+        name: Tatsächliches Lade-Limit
+      - entity: sensor.se_nf_today_charge_window
+        name: Ladeplan heute
+      - entity: sensor.se_nf_tomorrow_charge_window
+        name: Ladeplan morgen
+      - entity: sensor.se_nf_decision_reason
+        name: Entscheidung
+
+  - type: horizontal-stack
+    cards:
+      - type: gauge
+        entity: sensor.se_nf_battery_soe
+        name: Akku
+        min: 0
+        max: 100
+        needle: true
+        severity:
+          red: 0
+          yellow: 20
+          green: 50
+      - type: gauge
+        entity: input_number.se_nf_target_soc_pct
+        name: Ziel Netzdienlich
+        min: 0
+        max: 100
+        needle: true
+        severity:
+          green: 0
+          yellow: 80
+          red: 95
+
+  - type: markdown
+    title: Planungsdiagnose
+    content: |-
+      {% set start = states('sensor.se_nf_active_planned_start_timestamp') | float(0) %}
+      {% set finish = states('sensor.se_nf_today_end_timestamp') | float(0) %}
+      {% set candidate = states('sensor.se_nf_today_planned_start_candidate_timestamp') | float(0) %}
+      {% set stored = states('input_datetime.se_nf_session_planned_start') %}
+      {% set session = states('input_select.se_nf_session_state') %}
+
+      {% if start > 0 and finish > 0 and start >= finish %}
+      ## ⚠️ Ungültiges Zeitfenster erkannt
+      Der aktive Start liegt nicht vor dem aktuellen Fensterende. Bitte Kandidat,
+      gespeicherten Start und Session-Status prüfen.
+      {% elif candidate > 0 and start > 0 and candidate != start %}
+      ## ℹ️ Kandidat und aktiver Plan unterscheiden sich
+      Das kann während einer bereits geöffneten Session beabsichtigt sein.
+      {% else %}
+      ## ✅ Zeitfenster plausibel
+      Start und Ende sind in einer gültigen Reihenfolge.
+      {% endif %}
+
+      **Session:** {{ session }}  
+      **Gespeicherter Start:** {{ stored }}  
+      **Ladefenster:** {{ states('sensor.se_nf_today_charge_window') }}
+
+  - type: entities
+    title: Planungswerte · Diagnose für Moduswechsel
+    show_header_toggle: false
+    state_color: true
+    entities:
+      - entity: input_select.se_nf_optimization_mode
+        name: Gewählter Modus
+      - entity: sensor.se_nf_optimization_mode_effective
+        name: Effektiver Modus
+      - entity: input_select.se_nf_session_state
+        name: Session-Status
+      - type: divider
+      - entity: input_number.se_nf_min_start_hour
+        name: Netzdienlich · frühester Start
+      - entity: input_number.se_nf_latest_finish_hour
+        name: Netzdienlich · spätestens fertig
+      - entity: input_number.se_nf_start_safety_buffer_min
+        name: Netzdienlich · Sicherheitspuffer
+      - type: divider
+      - entity: input_number.se_nf_lifetime_min_start_hour
+        name: Akku schonen · frühester Start
+      - entity: input_number.se_nf_lifetime_latest_finish_hour
+        name: Akku schonen · spätestens fertig
+      - entity: input_number.se_nf_lifetime_start_safety_buffer_min
+        name: Akku schonen · Sicherheitspuffer
+      - type: divider
+      - entity: sensor.se_nf_mode_min_start_hour
+        name: Effektiver frühester Start
+      - entity: sensor.se_nf_mode_latest_finish_hour
+        name: Effektives Fensterende
+      - entity: sensor.se_nf_mode_start_safety_buffer_min
+        name: Effektiver Sicherheitspuffer
+      - entity: sensor.se_nf_required_charge_minutes
+        name: Benötigte Ladezeit
+      - entity: input_number.se_nf_replan_threshold_min
+        name: Replan-Schwelle
+      - type: divider
+      - entity: sensor.se_nf_today_planned_start_candidate_timestamp
+        name: Neu berechneter Startkandidat
+      - entity: input_datetime.se_nf_session_planned_start
+        name: Gespeicherter Start
+      - entity: sensor.se_nf_active_planned_start_timestamp
+        name: Aktiver Start
+      - entity: sensor.se_nf_today_end_timestamp
+        name: Aktuelles Fensterende
+      - entity: sensor.se_nf_today_charge_window
+        name: Angezeigtes Zeitfenster
+
+  - type: entities
+    title: Wetter & Prognose
+    show_header_toggle: false
+    state_color: true
+    entities:
+      - entity: sensor.se_nf_weather_planning_summary
+        name: Wetterbewertung
+      - entity: sensor.se_nf_weather_current_factor
+        name: Wetter aktuell
+      - entity: sensor.se_nf_weather_planning_factor_today
+        name: Faktor heute
+      - entity: sensor.se_nf_weather_lead_minutes
+        name: Frühstart durch Wetter
+      - type: divider
+      - entity: sensor.se_nf_remaining_pv_today
+        name: Rest-PV roh
+      - entity: sensor.se_nf_remaining_pv_today_weather_adjusted
+        name: Rest-PV mit Wetter
+      - entity: sensor.se_nf_available_pv_for_battery_today
+        name: PV für Akku
+      - type: divider
+      - entity: sensor.se_nf_load_forecast_7d_cached
+        name: Verbrauchsprognose 7 Tage
+      - entity: sensor.se_nf_load_forecast_source
+        name: Quelle Verbrauchsprognose
+      - entity: sensor.se_nf_load_forecast_summary
+        name: Zusammenfassung Verbrauch
+
+  - type: conditional
+    conditions:
+      - entity: input_select.se_nf_optimization_mode
+        state: Akku schonen
+    card:
+      type: entities
+      title: Akku schonen
+      show_header_toggle: false
+      state_color: true
+      entities:
+        - entity: input_number.se_nf_lifetime_min_start_hour
+          name: Frühester Ladebeginn
+        - entity: input_number.se_nf_lifetime_latest_finish_hour
+          name: Spätestens fertig
+        - entity: input_number.se_nf_lifetime_start_safety_buffer_min
+          name: Sicherheitspuffer
+        - entity: input_number.se_nf_lifetime_soc_buffer_pct
+          name: Zusätzlicher SoC-Puffer
+        - entity: sensor.se_nf_lifetime_night_energy_forecast
+          name: Geplanter Nachtbedarf
+        - entity: input_boolean.se_nf_lifetime_target_reached
+          name: Ziel erreicht
+
+  - type: entities
+    title: PV-Laden · Einstellungen
+    show_header_toggle: false
+    entities:
+      - entity: input_boolean.se_nf_weather_planning_enabled
+        name: Wetter berücksichtigen
+      - entity: input_number.se_nf_weather_current_weight_pct
+        name: Gewicht aktuelles Wetter
+      - entity: input_number.se_nf_weather_missing_forecast_factor
+        name: Wetter-Fallback
+      - entity: input_number.se_nf_target_soc_pct
+        name: Ziel-Ladestand Netzdienlich
+      - entity: input_number.se_nf_min_start_hour
+        name: Frühester Ladebeginn Netzdienlich
+      - entity: input_number.se_nf_latest_finish_hour
+        name: Spätestens fertig Netzdienlich
+      - entity: input_number.se_nf_start_safety_buffer_min
+        name: Sicherheitspuffer Netzdienlich
+      - entity: input_number.se_nf_planning_charge_power_w
+        name: Angenommene Ladeleistung
+
+  - type: entities
+    title: Schreibschutz
+    show_header_toggle: false
+    state_color: true
+    entities:
+      - entity: sensor.se_nf_writer_mode
+        name: Writer-Status
+      - entity: sensor.se_nf_writer_last_decision
+        name: Letzte Entscheidung
+      - entity: input_datetime.se_nf_last_write
+        name: Letzter Write
+      - entity: input_number.se_nf_write_cooldown_s
+        name: Cooldown
+      - entity: binary_sensor.se_nf_write_lock_active
+        name: Write-Lock aktiv
+      - entity: input_datetime.se_nf_write_lock_until
+        name: Write-Lock bis
