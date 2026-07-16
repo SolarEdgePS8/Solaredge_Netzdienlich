@@ -1,4 +1,4 @@
-# SolarEdge Netzdienlich Package v2.9.6
+# SolarEdge Netzdienlich Package v2.9.7
 
 Home-Assistant-Package zur planbaren und netzdienlichen Steuerung eines SolarEdge-Speichers.
 
@@ -9,8 +9,6 @@ Dieses Repository ist ein **Home-Assistant-Package-Bundle**. Es ist keine HACS-I
 - **Neue Installation:** [`docs/01_FIRST_INSTALL.md`](docs/01_FIRST_INSTALL.md)
 - **Update einer bestehenden Installation:** [`docs/02_UPDATE_EXISTING.md`](docs/02_UPDATE_EXISTING.md)
 
-Damit gibt es nicht mehr mehrere konkurrierende Installationsanleitungen.
-
 ## Struktur
 
 ```text
@@ -18,6 +16,7 @@ package/      vier Home-Assistant-Package-Dateien
 config/       Vorlage für die einmalige Konfiguration einer neuen Instanz
 scripts/      Installation, Konfiguration, Discovery und erster Check
 audit/        Read-only-, Manifest- und optionaler Safe-A/B-Test
+dashboard/    portables Lovelace-Dashboard und Installationshinweise
 docs/         sechs fortlaufend nummerierte Anleitungen
 validation/   anonymisierte Release-Gates, Datenschutzhinweis und Datei-Hashes
 github/       Release-Text und Veröffentlichungscheckliste
@@ -37,50 +36,36 @@ Kurzablauf:
 8. Read-only-Audit ausführen.
 9. Master-Schalter erst danach aktivieren.
 
-## Warum ist eine Site-Konfiguration nötig?
+## Optionale Mappings in v2.9.7
 
-Entity-Namen unterscheiden sich zwischen Home-Assistant-Instanzen. Das Package darf nicht an Namen wie `sensor.power_solar_generation` oder `weather.ps8` gebunden sein. Die lokale Instanz teilt dem Package deshalb über `input_text.se_nf_*` mit, welche Sensoren es verwenden soll.
+- `ACTUAL_PV_TODAY_ENTITIES`: heutiger PV-Ertrag in `Wh`, `kWh` oder `MWh`.
+- `DAILY_CONSUMPTION_ENTITY`: heutiger kumulierter Hausverbrauch, kein Durchschnitt.
+- `PV_ACTUAL_METER_SOURCE_ENTITY`: fortlaufender PV-Gesamtenergiezähler.
+- `EVCC_BATTERY_MODE_ENTITY`: optionaler Rückkanal von evcc zu Home Assistant.
+
+Ist kein direkter Tagesertragssensor vorhanden, kann das Package den intern erzeugten
+`sensor.se_nf_pv_actual_today_meter` automatisch als Fallback verwenden.
+
+## Ladefenster und Moduswechsel
+
+v2.9.7 prüft strikt, dass ein aktiver Start vor dem aktuellen Fensterende liegt. Beim bewussten Wechsel zwischen `Akku schonen` und `Netzdienlich laden` wird außerhalb einer laufenden Session neu geplant. Eine aktive Session wird nicht rückwirkend verschoben.
+
+Das Dashboard unter [`dashboard/`](dashboard/) zeigt Kandidat, gespeicherten Start, aktiven Start, Fensterende und Session-Zustand gemeinsam an.
 
 ## PV-Ist-Leistung einfach erklärt
 
-Der Helfer lautet:
-
-```text
-input_text.se_nf_live_pv_power_entities
-```
-
-Hier gehört mindestens ein Sensor für die **aktuelle PV-Leistung in Watt** hinein.
-
-Beispiel:
-
-```text
-sensor.meine_pv_leistung
-```
-
-Mehrere Einträge sind als Fallback-Liste möglich:
-
-```text
-sensor.meine_pv_leistung,sensor.meine_pv_leistung_gefiltert,sensor.mein_wechselrichter_ac_power
-```
-
-`_filtered` ist keine Pflicht. Es bezeichnet lediglich einen optional geglätteten Sensor. Das Package nimmt den ersten gültigen Sensor der Liste. Energiezähler in `kWh` sind an dieser Stelle falsch.
+Der Helfer `input_text.se_nf_live_pv_power_entities` erwartet mindestens einen Sensor für die **aktuelle PV-Leistung in Watt**. Mehrere Einträge sind als kommaseparierte Fallback-Liste möglich. `_filtered` ist keine Pflicht; Energiezähler in `kWh` sind hier falsch.
 
 ## Sicherheit
 
-Der Master-Schalter bleibt bei einer neuen Installation zunächst aus:
-
-```text
-input_boolean.se_netzdienlich_enabled = off
-```
-
-Vor der Aktivierung müssen mindestens gelten:
+Der Master-Schalter bleibt bei einer neuen Installation zunächst aus. Vor der Aktivierung müssen mindestens gelten:
 
 ```text
 sensor.se_nf_config_check = ok
 sensor.se_nf_sanity_check = ok
 ```
 
-`writer_mode = normal` kann ebenfalls ein gültiger Ruhezustand sein. Entscheidend sind plausible Ziel-/Istwerte und grüne Config-/Sanity-Checks.
+`writer_mode = normal` kann ein gültiger Ruhezustand sein. Entscheidend sind plausible Ziel-/Istwerte und grüne Config-/Sanity-Checks.
 
 ## Release-Gates
 

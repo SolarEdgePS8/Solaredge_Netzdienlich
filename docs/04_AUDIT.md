@@ -39,6 +39,6 @@ Kombiniert Read-only und Safe-A/B. Nicht als ersten Test verwenden.
 ## Standardaufruf
 
 ```bash
-/share/se_nf_release_audit_v296/run_readonly.sh
-/share/se_nf_release_audit_v296/se_nf_manifest_audit.py
+/share/se_nf_release_audit/run_readonly.sh
+/share/se_nf_release_audit/se_nf_manifest_audit.py
 ```

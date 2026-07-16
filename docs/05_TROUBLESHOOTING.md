@@ -4,7 +4,7 @@
 
 Dieser Zustand bedeutet, dass das Package den Akku-SoE-Sensor als zu alt bewertet.
 
-v2.9.6 berechnet das Alter bevorzugt aus `last_reported`. Dadurch wird ein regelmäßig gemeldeter, aber unveränderter Akkuwert nicht mehr fälschlich nur wegen `last_updated` als alt angesehen.
+v2.9.7 berechnet das Alter bevorzugt aus `last_reported`. Dadurch wird ein regelmäßig gemeldeter, aber unveränderter Akkuwert nicht mehr fälschlich nur wegen `last_updated` als alt angesehen.
 
 Prüfen:
 
@@ -50,7 +50,7 @@ Prüfen:
 - parallele Schreibautomationen deaktiviert?
 - SolarEdge-Integration aktuell und stabil?
 
-v2.9.6 behebt zusätzlich einen internen Robustheitspunkt: `last_write`, Write-Lock und `last_applied` werden erst nach einem erfolgreichen `number.set_value` aktualisiert. Schlägt der Modbus-Service fehl, wird der Write also nicht mehr fälschlich als erfolgreich verbucht.
+v2.9.7 behebt zusätzlich einen internen Robustheitspunkt: `last_write`, Write-Lock und `last_applied` werden erst nach einem erfolgreichen `number.set_value` aktualisiert. Schlägt der Modbus-Service fehl, wird der Write also nicht mehr fälschlich als erfolgreich verbucht.
 
 Es werden bewusst keine zusätzlichen aggressiven Schreibwiederholungen eingebaut, weil die Integration selbst bereits Wiederholungen ausführt und weitere Retries den Modbus-Verkehr verschärfen könnten.
 
@@ -63,3 +63,19 @@ Zuerst die Einheiten prüfen:
 - SoE/Reserve: `%`
 
 Danach Read-only-Audit und Mapping-Check ausführen.
+
+## Zeitfenster ändert sich beim Moduswechsel nicht
+
+Prüfen:
+
+```text
+input_select.se_nf_optimization_mode
+sensor.se_nf_optimization_mode_effective
+sensor.se_nf_today_planned_start_candidate_timestamp
+input_datetime.se_nf_session_planned_start
+sensor.se_nf_active_planned_start_timestamp
+sensor.se_nf_today_end_timestamp
+input_select.se_nf_session_state
+```
+
+Bei einer bereits geöffneten Session darf der historische Start stabil bleiben. Außerhalb einer aktiven Session müssen der neue Kandidat und der aktive Plan jedoch zusammenpassen. Ein Fenster mit `Start >= Ende` ist immer ungültig und wird ab v2.9.7 nicht mehr als normales Ladefenster ausgegeben.

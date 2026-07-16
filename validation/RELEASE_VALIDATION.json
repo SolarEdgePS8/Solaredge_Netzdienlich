@@ -1,6 +1,30 @@
 {
-  "version": "v2.9.6",
-  "validation_type": "sanitized_public_release_summary",
+  "version": "v2.9.7",
+  "built_at": "2026-07-16T17:00:00+02:00",
+  "base_release": "v2.9.6",
+  "issues_addressed": {
+    "4": "Optional mappings, PV daily utility-meter fallback, energy validation and EVCC diagnostics",
+    "5": "Strict charge-window ordering and safe replanning on optimization-mode changes"
+  },
+  "runtime": {
+    "source": "local Home Assistant runtime test on 2026-07-16",
+    "config_check": "ok",
+    "sanity_check": "ok",
+    "issue_4": {
+      "pv_source": "sensor.se_nf_pv_actual_today_meter",
+      "pv_actual_kwh": 38.9,
+      "evcc_request": "off",
+      "evcc_mapping_status": "optional_inactive"
+    },
+    "issue_5": {
+      "candidate_start": "11:45",
+      "stored_start": "11:45",
+      "active_start": "11:45",
+      "window_end": "14:15",
+      "window_order_valid": true,
+      "session_state": "done"
+    }
+  },
   "gates": {
     "GATE_STATIC_MAIN_CRITICAL": "PASS",
     "critical_main": 0,
@@ -8,14 +32,11 @@
     "runtime_fail_count": 0,
     "GATE_MANIFEST": "PASS_OR_EXTERNAL_REVIEW",
     "critical_internal": 0,
-    "missing_files": 0,
-    "legacy_hits": 0,
-    "duplicate_unique_ids": 0
+    "GATE_DASHBOARD": "PASS"
   },
-  "issues_addressed": {
-    "1": "last_reported freshness handling, 1800-second default and clearer first-run documentation",
-    "2": "writer bookkeeping after successful write, mapped entities and reduced redundant Master-OFF writes",
-    "3": "clear mapping documentation and zero-watt-safe fallback resolvers"
-  },
-  "privacy_note": "Instance-specific entity states, timestamps, energy values and local audit reports are intentionally not included in the public release."
+  "notes": [
+    "External SolarEdge and local sensor mappings remain installation-specific.",
+    "Safe-A/B audit is included but was not automatically rerun during the offline ZIP build.",
+    "The dashboard uses Home Assistant standard cards only."
+  ]
 }

@@ -84,8 +84,8 @@ Das Script:
 
 ```bash
 ./scripts/install_audit_suite.sh
-/share/se_nf_release_audit_v296/run_readonly.sh
-/share/se_nf_release_audit_v296/se_nf_manifest_audit.py
+/share/se_nf_release_audit/run_readonly.sh
+/share/se_nf_release_audit/se_nf_manifest_audit.py
 ```
 
 ## 7. Ergebnis prüfen

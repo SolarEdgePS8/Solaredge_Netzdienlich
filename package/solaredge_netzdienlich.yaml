@@ -1,3 +1,5 @@
+# SolarEdge Netzdienlich Package v2.9.7
+# Fixes GitHub Issues #4 and #5
 # V2.9.6 Portability/Robustness
 # - Sensoralter nutzt last_reported mit last_updated-Fallback
 # - Writer-Bookkeeping erst nach erfolgreichem SolarEdge-Write
@@ -1930,28 +1932,63 @@ template:
           {% set min_h = min_hour | int(0) %}
           {% set min_m = ((min_hour - min_h) * 60) | round(0) | int(0) %}
           {% set min_ts = as_timestamp(today_at('%02d:%02d:00' | format(min_h, min_m)), 0) | int(0) %}
-          {% set end_grace_ts = states('sensor.se_nf_today_end_with_grace_timestamp') | int(0) %}
+          {% set end_ts = states('sensor.se_nf_today_end_timestamp') | int(0) %}
           {% set day_start_ts = as_timestamp(today_at('06:00:00'), 0) | int(0) %}
-          {% set need = states('sensor.se_nf_needed_energy') | float(0) %}
-          {% set pv_for_akku = states('sensor.se_nf_available_pv_for_battery_today') | float(99) %}
-          {% set margin = states('sensor.se_nf_live_battery_pv_margin') | float(99) %}
-          {% set remaining = states('sensor.se_nf_remaining_pv_today') | float(0) %}
-          {% set forecast_now = states('sensor.se_nf_live_pv_forecast_now') | float(0) %}
-          {% set critical_latched_today = is_state('input_boolean.se_nf_critical_deficit_latched_today','on') %}
+          {% set now_ts = now().timestamp() | int(0) %}
+          {% set state_now = states('input_select.se_nf_session_state') %}
+          {% set active_session = state_now in ['open','battery_full_open'] %}
           {% set critical_planned_valid =
-             critical_latched_today
+             is_state('input_boolean.se_nf_critical_deficit_latched_today','on')
              and planned_ts > 0
              and planned_ts >= day_start_ts
-             and planned_ts <= end_grace_ts
+             and planned_ts < end_ts
              and is_state('sensor.se_nf_sanity_check','ok')
              and is_state('sensor.se_nf_config_check','ok')
              and is_state('binary_sensor.se_nf_risk_flag','off') %}
-          {% set planned_valid = (planned_ts >= min_ts and planned_ts <= end_grace_ts) or critical_planned_valid %}
-          {% if planned_valid %}
+          {% set regular_planned_valid = planned_ts >= min_ts and planned_ts < end_ts %}
+          {% set active_session_plan_valid =
+             active_session
+             and planned_ts >= day_start_ts
+             and planned_ts <= now_ts
+             and planned_ts < end_ts %}
+          {% set candidate_valid = candidate_ts >= min_ts and candidate_ts < end_ts %}
+          {% if regular_planned_valid or critical_planned_valid or active_session_plan_valid %}
             {{ planned_ts }}
-          {% else %}
+          {% elif candidate_valid %}
             {{ candidate_ts }}
+          {% else %}
+            0
           {% endif %}
+        attributes:
+          selected_source: >-
+            {% set planned_ts = as_timestamp(states('input_datetime.se_nf_session_planned_start'), 0) | int(0) %}
+            {% set candidate_ts = states('sensor.se_nf_today_planned_start_candidate_timestamp') | int(0) %}
+            {% set min_hour = states('sensor.se_nf_mode_min_start_hour') | float(11.75) %}
+            {% set min_h = min_hour | int(0) %}
+            {% set min_m = ((min_hour - min_h) * 60) | round(0) | int(0) %}
+            {% set min_ts = as_timestamp(today_at('%02d:%02d:00' | format(min_h, min_m)), 0) | int(0) %}
+            {% set end_ts = states('sensor.se_nf_today_end_timestamp') | int(0) %}
+            {% set day_start_ts = as_timestamp(today_at('06:00:00'), 0) | int(0) %}
+            {% set now_ts = now().timestamp() | int(0) %}
+            {% set state_now = states('input_select.se_nf_session_state') %}
+            {% set active_session = state_now in ['open','battery_full_open'] %}
+            {% set critical_valid = is_state('input_boolean.se_nf_critical_deficit_latched_today','on') and planned_ts >= day_start_ts and planned_ts < end_ts %}
+            {% set regular_valid = planned_ts >= min_ts and planned_ts < end_ts %}
+            {% set active_valid = active_session and planned_ts >= day_start_ts and planned_ts <= now_ts and planned_ts < end_ts %}
+            {% set candidate_valid = candidate_ts >= min_ts and candidate_ts < end_ts %}
+            {% if active_valid %}active_session_stored_plan
+            {% elif critical_valid %}critical_stored_plan
+            {% elif regular_valid %}stored_plan
+            {% elif candidate_valid %}candidate
+            {% else %}none
+            {% endif %}
+          stored_start_timestamp: >-
+            {{ as_timestamp(states('input_datetime.se_nf_session_planned_start'), 0) | int(0) }}
+          candidate_start_timestamp: >-
+            {{ states('sensor.se_nf_today_planned_start_candidate_timestamp') | int(0) }}
+          window_end_timestamp: >-
+            {{ states('sensor.se_nf_today_end_timestamp') | int(0) }}
+          session_state: "{{ states('input_select.se_nf_session_state') }}"
 
       - name: "SE NF Today Charge Window"
         unique_id: se_nf_today_charge_window
@@ -1961,13 +1998,24 @@ template:
           {% set end_ts = states('sensor.se_nf_today_end_timestamp') | int(0) %}
           {% set need = states('sensor.se_nf_needed_energy') | float(0) %}
           {% set avail = states('sensor.se_nf_available_pv_for_battery_today') | float(0) %}
+          {% set valid = start_ts > 0 and end_ts > 0 and start_ts < end_ts %}
           {% if need <= 0.05 %}
             Heute keine Ladung nötig · Akku voll
-          {% elif start_ts <= 0 or end_ts <= 0 %}
-            Heute kein gültiges Ladefenster
+          {% elif not valid %}
+            Heute kein gültiges Ladefenster · Start und Ende prüfen
           {% else %}
             Heute · {{ start_ts | timestamp_custom('%H:%M', true) }}–{{ end_ts | timestamp_custom('%H:%M', true) }} · Bedarf {{ need }} kWh · PV-Puffer {{ (avail - need) | round(2) }} kWh · Verbrauchs-Vorzug {{ states('sensor.se_nf_load_coverage_lead_minutes') }} min · {{ states('sensor.se_nf_weather_planning_summary') }}
           {% endif %}
+        attributes:
+          window_valid: >-
+            {% set start_ts = states('sensor.se_nf_active_planned_start_timestamp') | int(0) %}
+            {% set end_ts = states('sensor.se_nf_today_end_timestamp') | int(0) %}
+            {{ start_ts > 0 and end_ts > 0 and start_ts < end_ts }}
+          start_timestamp: "{{ states('sensor.se_nf_active_planned_start_timestamp') | int(0) }}"
+          end_timestamp: "{{ states('sensor.se_nf_today_end_timestamp') | int(0) }}"
+          selected_start_source: >-
+            {{ state_attr('sensor.se_nf_active_planned_start_timestamp', 'selected_source') }}
+          session_state: "{{ states('input_select.se_nf_session_state') }}"
 
       - name: "SE NF Tomorrow Charge Window"
         unique_id: se_nf_tomorrow_charge_window
@@ -2320,13 +2368,35 @@ template:
           minutes: 12
         icon: mdi:ev-station
         state: >-
-          {% set bad = ['unknown','unavailable','none','None',''] %}
-            {% set evcc_e = states('input_text.se_nf_evcc_battery_mode_entity') | trim %}
-            {% set mode = states(evcc_e) | lower | trim if evcc_e not in bad else '' %}
-          {% set bad = ['unknown','unavailable','none','off','idle','normal','hold',''] %}
+          {% set mapping_bad = ['unknown','unavailable','none','None',''] %}
+          {% set inactive = ['unknown','unavailable','none','off','idle','normal','hold','unbekannt',''] %}
+          {% set evcc_e = states('input_text.se_nf_evcc_battery_mode_entity') | trim %}
+          {% set mode = states(evcc_e) | lower | trim if evcc_e not in mapping_bad else '' %}
           {% set is_discharge = 'discharge' in mode or 'entladen' in mode %}
           {% set is_charge = 'charge' in mode or 'laden' in mode %}
-          {{ mode not in bad and is_charge and not is_discharge }}
+          {{ mode not in inactive and is_charge and not is_discharge }}
+        attributes:
+          source_entity: >-
+            {{ states('input_text.se_nf_evcc_battery_mode_entity') | trim }}
+          raw_mode: >-
+            {% set e = states('input_text.se_nf_evcc_battery_mode_entity') | trim %}
+            {{ states(e) if e not in ['unknown','unavailable','none','None',''] else '' }}
+          mapping_status: >-
+            {% set mapping_bad = ['unknown','unavailable','none','None',''] %}
+            {% set inactive = ['unknown','unavailable','none','off','idle','normal','hold','unbekannt',''] %}
+            {% set e = states('input_text.se_nf_evcc_battery_mode_entity') | trim %}
+            {% set mode = states(e) | lower | trim if e not in mapping_bad else '' %}
+            {% set is_discharge = 'discharge' in mode or 'entladen' in mode %}
+            {% set is_charge = 'charge' in mode or 'laden' in mode %}
+            {% if e in mapping_bad or mode in inactive %}
+              optional_inactive
+            {% elif is_charge and not is_discharge %}
+              charge_request
+            {% elif is_discharge %}
+              discharge
+            {% else %}
+              unknown_mode
+            {% endif %}
 
 
       - name: "SE NF Sanity OK"
@@ -2365,15 +2435,59 @@ template:
         icon: mdi:solar-power
         state: >-
           {% set bad = ['unknown','unavailable','none','None',''] %}
-          {% set candidates = states('input_text.se_nf_actual_pv_today_entities').split(',') %}
+          {% set energy_units = ['Wh','kWh','MWh'] %}
+          {% set configured = states('input_text.se_nf_actual_pv_today_entities') | trim %}
+          {% set candidates = configured.split(',') if configured not in bad else [] %}
           {% set ns = namespace(eid='none') %}
           {% for eid in candidates %}
             {% set e = eid | string | trim %}
-            {% if ns.eid == 'none' and e.startswith('sensor.') and states(e) not in bad %}
+            {% set unit = state_attr(e, 'unit_of_measurement') %}
+            {% if ns.eid == 'none'
+                  and e.startswith('sensor.')
+                  and states(e) not in bad
+                  and is_number(states(e))
+                  and unit in energy_units %}
               {% set ns.eid = e %}
             {% endif %}
           {% endfor %}
+          {% set meter = 'sensor.se_nf_pv_actual_today_meter' %}
+          {% set source_e = states('input_text.se_nf_pv_actual_meter_source_entity') | trim %}
+          {% set source_unit = state_attr(source_e, 'unit_of_measurement') %}
+          {% set source_valid = source_e.startswith('sensor.')
+                                and states(source_e) not in bad
+                                and is_number(states(source_e))
+                                and source_unit in energy_units %}
+          {% set meter_valid = states(meter) not in bad
+                               and is_number(states(meter))
+                               and state_attr(meter, 'unit_of_measurement') in energy_units %}
+          {% if ns.eid == 'none' and source_valid and meter_valid %}
+            {% set ns.eid = meter %}
+          {% endif %}
           {{ ns.eid }}
+        attributes:
+          configured_candidates: >-
+            {{ states('input_text.se_nf_actual_pv_today_entities') | trim }}
+          meter_source_entity: >-
+            {{ states('input_text.se_nf_pv_actual_meter_source_entity') | trim }}
+          source_kind: >-
+            {% set bad = ['unknown','unavailable','none','None',''] %}
+            {% set energy_units = ['Wh','kWh','MWh'] %}
+            {% set configured = states('input_text.se_nf_actual_pv_today_entities') | trim %}
+            {% set candidates = configured.split(',') if configured not in bad else [] %}
+            {% set ns = namespace(valid=false) %}
+            {% for eid in candidates %}
+              {% set e = eid | string | trim %}
+              {% if not ns.valid and e.startswith('sensor.') and states(e) not in bad and is_number(states(e)) and state_attr(e, 'unit_of_measurement') in energy_units %}
+                {% set ns.valid = true %}
+              {% endif %}
+            {% endfor %}
+            {% set source_e = states('input_text.se_nf_pv_actual_meter_source_entity') | trim %}
+            {% set source_valid = source_e.startswith('sensor.') and states(source_e) not in bad and is_number(states(source_e)) and state_attr(source_e, 'unit_of_measurement') in energy_units %}
+            {% set meter_valid = states('sensor.se_nf_pv_actual_today_meter') not in bad and is_number(states('sensor.se_nf_pv_actual_today_meter')) and state_attr('sensor.se_nf_pv_actual_today_meter', 'unit_of_measurement') in energy_units %}
+            {% if ns.valid %}configured_candidate
+            {% elif source_valid and meter_valid %}utility_meter_fallback
+            {% else %}optional_inactive
+            {% endif %}
 
       - name: "SE NF Adaptive PV Actual Today"
         unique_id: se_nf_adaptive_pv_actual_today
@@ -2382,11 +2496,25 @@ template:
         state: >-
           {% set eid = states('sensor.se_nf_adaptive_pv_actual_today_source') %}
           {% set bad = ['unknown','unavailable','none','None',''] %}
-          {% if eid.startswith('sensor.') and states(eid) not in bad %}
-            {{ states(eid) | float(0) | round(3) }}
+          {% set unit = state_attr(eid, 'unit_of_measurement') %}
+          {% if eid.startswith('sensor.') and states(eid) not in bad and is_number(states(eid)) %}
+            {% set value = states(eid) | float(0) %}
+            {% if unit == 'Wh' %}
+              {{ (value / 1000) | round(3) }}
+            {% elif unit == 'MWh' %}
+              {{ (value * 1000) | round(3) }}
+            {% else %}
+              {{ value | round(3) }}
+            {% endif %}
           {% else %}
             0
           {% endif %}
+        attributes:
+          source_entity: "{{ states('sensor.se_nf_adaptive_pv_actual_today_source') }}"
+          source_unit: >-
+            {{ state_attr(states('sensor.se_nf_adaptive_pv_actual_today_source'), 'unit_of_measurement') }}
+          source_kind: >-
+            {{ state_attr('sensor.se_nf_adaptive_pv_actual_today_source', 'source_kind') }}
 
       - name: "SE NF Adaptive PV Overmorrow Source"
         unique_id: se_nf_adaptive_pv_overmorrow_source
@@ -2821,7 +2949,7 @@ template:
           erklaerung: "Bei Akku schonen wird der Ziel-Ladestand aus Nachtbedarf, Reserve und zusätzlichem Puffer berechnet."
   # <<< merged from solaredge_speicher_user_settings.yaml / rc2 target SOC sensor
 
-  # >>> V3.0-rc4: mappable PV actual meter source
+  # >>> V2.9.7 Issue #4: mappable PV actual meter source
   - sensor:
       - name: "SE NF PV Actual Meter Source Energy"
         unique_id: se_nf_pv_actual_meter_source_energy
@@ -2829,19 +2957,47 @@ template:
         device_class: energy
         state_class: total_increasing
         icon: mdi:solar-power-variant
-        state: >-
+        availability: >-
           {% set bad = ['unknown','unavailable','none','None',''] %}
+          {% set energy_units = ['Wh','kWh','MWh'] %}
           {% set e = states('input_text.se_nf_pv_actual_meter_source_entity') | trim %}
-          {% if e not in bad and e.startswith('sensor.') %}
-            {% set v = states(e) %}
-            {{ v | float(0) if v not in bad else 0 }}
+          {{ e.startswith('sensor.')
+             and states(e) not in bad
+             and is_number(states(e))
+             and state_attr(e, 'unit_of_measurement') in energy_units }}
+        state: >-
+          {% set e = states('input_text.se_nf_pv_actual_meter_source_entity') | trim %}
+          {% set unit = state_attr(e, 'unit_of_measurement') %}
+          {% set value = states(e) | float(0) %}
+          {% if unit == 'Wh' %}
+            {{ (value / 1000) | round(3) }}
+          {% elif unit == 'MWh' %}
+            {{ (value * 1000) | round(3) }}
           {% else %}
-            0
+            {{ value | round(3) }}
           {% endif %}
         attributes:
           source_entity: "{{ states('input_text.se_nf_pv_actual_meter_source_entity') | trim }}"
-          note: "V3.0-rc4: Utility-Meter-Quelle ist über input_text.se_nf_pv_actual_meter_source_entity konfigurierbar."
-  # <<< V3.0-rc4: mappable PV actual meter source
+          source_unit: >-
+            {% set e = states('input_text.se_nf_pv_actual_meter_source_entity') | trim %}
+            {{ state_attr(e, 'unit_of_measurement') }}
+          source_state_class: >-
+            {% set e = states('input_text.se_nf_pv_actual_meter_source_entity') | trim %}
+            {{ state_attr(e, 'state_class') }}
+          mapping_status: >-
+            {% set bad = ['unknown','unavailable','none','None',''] %}
+            {% set energy_units = ['Wh','kWh','MWh'] %}
+            {% set e = states('input_text.se_nf_pv_actual_meter_source_entity') | trim %}
+            {% if e in bad %}
+              optional_inactive
+            {% elif not e.startswith('sensor.') or states(e) in bad or not is_number(states(e)) %}
+              invalid_mapping
+            {% elif state_attr(e, 'unit_of_measurement') not in energy_units %}
+              invalid_unit
+            {% else %}
+              active
+            {% endif %}
+  # <<< V2.9.7 Issue #4: mappable PV actual meter source
 automation:
   - id: se_nf_v288_sql_load_forecast_poll
     alias: "SolarEdge: Netzdienlich V2.8.9a SQL Load Forecast Poll"
@@ -2896,6 +3052,7 @@ automation:
       - platform: state
         entity_id:
           - sensor.se_nf_today_planned_start_candidate_timestamp
+          - sensor.se_nf_today_end_timestamp
           - input_select.se_nf_session_state
           - input_select.se_nf_optimization_mode
           - input_number.se_nf_replan_threshold_min
@@ -2916,27 +3073,38 @@ automation:
           min_h: "{{ min_hour | int(0) }}"
           min_m: "{{ ((min_hour | float(11.75) - min_h | int(0)) * 60) | round(0) | int(0) }}"
           min_ts: "{{ as_timestamp(today_at('%02d:%02d:00' | format(min_h | int(0), min_m | int(0))), 0) | int(0) }}"
-          end_grace_ts: "{{ states('sensor.se_nf_today_end_with_grace_timestamp') | int(0) }}"
+          end_ts: "{{ states('sensor.se_nf_today_end_timestamp') | int(0) }}"
           day_start_ts: "{{ as_timestamp(today_at('06:00:00'), 0) | int(0) }}"
-          current_valid: "{{ current_ts | int(0) >= min_ts | int(0) and current_ts | int(0) <= end_grace_ts | int(0) }}"
           state_now: "{{ states('input_select.se_nf_session_state') }}"
+          active_session: "{{ state_now in ['open','battery_full_open'] }}"
+          candidate_valid: "{{ candidate_ts | int(0) >= min_ts | int(0) and candidate_ts | int(0) < end_ts | int(0) }}"
+          current_regular_valid: "{{ current_ts | int(0) >= min_ts | int(0) and current_ts | int(0) < end_ts | int(0) }}"
           critical_planned_valid: >-
             {{ is_state('input_boolean.se_nf_critical_deficit_latched_today','on')
-               and current_ts | int(0) > 0
                and current_ts | int(0) >= day_start_ts | int(0)
-               and current_ts | int(0) <= end_grace_ts | int(0)
+               and current_ts | int(0) < end_ts | int(0)
                and is_state('sensor.se_nf_sanity_check','ok')
                and is_state('sensor.se_nf_config_check','ok')
                and is_state('binary_sensor.se_nf_risk_flag','off') }}
+          current_valid: "{{ current_regular_valid or critical_planned_valid }}"
+          mode_change: >-
+            {{ trigger is defined
+               and trigger.platform == 'state'
+               and trigger.entity_id == 'input_select.se_nf_optimization_mode'
+               and trigger.from_state is not none
+               and trigger.to_state is not none
+               and trigger.from_state.state != trigger.to_state.state }}
           may_replan: >-
-            {{ (state_now in ['closed','armed'] or not current_valid)
-               and not critical_planned_valid }}
+            {{ not active_session
+               and not critical_planned_valid
+               and (state_now in ['closed','armed','done'] or not current_valid) }}
       - condition: template
         value_template: >-
-          {{ candidate_ts | int(0) > 0
+          {{ candidate_valid
              and may_replan
              and (
-               not current_valid
+               mode_change
+               or not current_valid
                or current_ts | int(0) <= 0
                or (candidate_ts | int(0) - current_ts | int(0)) | abs >= threshold_s | int(1800)
              ) }}
@@ -2963,9 +3131,10 @@ automation:
           - sensor.se_nf_sanity_check
           - sensor.se_nf_battery_soe
           - sensor.se_nf_needed_energy
+          - sensor.se_nf_today_end_timestamp
+          - sensor.se_nf_today_planned_start_candidate_timestamp
           - input_datetime.se_nf_session_planned_start
           - sensor.se_nf_active_planned_start_timestamp
-          - input_datetime.se_nf_last_open_write
           - binary_sensor.se_nf_evcc_grid_charge_request
     action:
       - variables:
@@ -2975,30 +3144,28 @@ automation:
           now_ts: "{{ now().timestamp() | int(0) }}"
           day_start_ts: "{{ as_timestamp(today_at('06:00:00'), 0) | int(0) }}"
           planned_ts: "{{ as_timestamp(states('input_datetime.se_nf_session_planned_start'), 0) | int(0) }}"
-          active_planned_ts: "{{ states('sensor.se_nf_active_planned_start_timestamp') | int(0) }}"
           candidate_ts: "{{ states('sensor.se_nf_today_planned_start_candidate_timestamp') | int(0) }}"
-          last_open_ts: "{{ as_timestamp(states('input_datetime.se_nf_last_open_write'), 0) | int(0) }}"
+          end_ts: "{{ states('sensor.se_nf_today_end_timestamp') | int(0) }}"
           end_grace_ts: "{{ states('sensor.se_nf_today_end_with_grace_timestamp') | int(0) }}"
           min_hour: "{{ states('sensor.se_nf_mode_min_start_hour') | float(11.75) }}"
           min_h: "{{ min_hour | int(0) }}"
           min_m: "{{ ((min_hour | float(11.75) - min_h | int(0)) * 60) | round(0) | int(0) }}"
           min_ts: "{{ as_timestamp(today_at('%02d:%02d:00' | format(min_h | int(0), min_m | int(0))), 0) | int(0) }}"
+          state_now: "{{ states('input_select.se_nf_session_state') }}"
+          active_session_now: "{{ state_now in ['open','battery_full_open'] }}"
           critical_planned_valid: >-
             {{ is_state('input_boolean.se_nf_critical_deficit_latched_today','on')
-               and planned_ts | int(0) > 0
                and planned_ts | int(0) >= day_start_ts | int(0)
-               and planned_ts | int(0) <= end_grace_ts | int(0)
+               and planned_ts | int(0) < end_ts | int(0)
                and cfg_ok
                and sanity_ok
                and is_state('binary_sensor.se_nf_risk_flag','off') }}
-          planned_valid: "{{ (planned_ts | int(0) >= min_ts | int(0) and planned_ts | int(0) <= end_grace_ts | int(0)) or critical_planned_valid }}"
-          opened_today: "{{ last_open_ts | int(0) >= day_start_ts | int(0) and last_open_ts | int(0) > 0 }}"
-          valid_planned_open_today: >-
-            {{ last_open_ts | int(0) >= day_start_ts | int(0)
-               and last_open_ts | int(0) > 0
-               and planned_valid
-               and planned_ts | int(0) > 0
-               and last_open_ts | int(0) >= (planned_ts | int(0) - 60) }}
+          planned_valid: >-
+            {{ (planned_ts | int(0) >= min_ts | int(0) and planned_ts | int(0) < end_ts | int(0))
+               or critical_planned_valid }}
+          candidate_valid: >-
+            {{ candidate_ts | int(0) >= min_ts | int(0)
+               and candidate_ts | int(0) < end_ts | int(0) }}
           soe: "{{ states('sensor.se_nf_battery_soe') | float(0) }}"
           low: "{{ states('input_number.se_nf_low_soc_floor_pct') | float(25) }}"
           need: "{{ states('sensor.se_nf_needed_energy') | float(0) }}"
@@ -3018,13 +3185,15 @@ automation:
               open
             {% elif mode == 'Akku schonen' and lifetime_reached %}
               done
-            {% elif valid_planned_open_today and end_grace_ts | int(0) > 0 and now_ts | int(0) <= end_grace_ts | int(0) %}
+            {% elif active_session_now and end_grace_ts | int(0) > 0 and now_ts | int(0) <= end_grace_ts | int(0) %}
               {% if need | float(0) <= 0.05 %}
                 battery_full_open
               {% else %}
                 open
               {% endif %}
-            {% elif valid_planned_open_today and end_grace_ts | int(0) > 0 and now_ts | int(0) > end_grace_ts | int(0) %}
+            {% elif active_session_now and end_grace_ts | int(0) > 0 and now_ts | int(0) > end_grace_ts | int(0) %}
+              done
+            {% elif end_ts | int(0) > 0 and now_ts | int(0) >= end_ts | int(0) %}
               done
             {% elif planned_valid and planned_ts | int(0) > 0 and now_ts | int(0) >= planned_ts | int(0) %}
               {% if need | float(0) <= 0.05 %}
@@ -3034,7 +3203,7 @@ automation:
               {% endif %}
             {% elif planned_valid and planned_ts | int(0) > 0 %}
               armed
-            {% elif candidate_ts | int(0) > 0 %}
+            {% elif candidate_valid %}
               armed
             {% else %}
               closed
@@ -3046,7 +3215,6 @@ automation:
           entity_id: input_select.se_nf_session_state
         data:
           option: "{{ next_state | trim }}"
-
 
 
   - id: se_nf_v29_lifetime_latch_reset

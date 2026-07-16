@@ -33,6 +33,18 @@ set_text() {
     -d "{\"entity_id\":\"$entity\",\"value\":\"$value\"}" >/dev/null
 }
 
+
+set_text_optional() {
+ entity="$1"
+ value="${2-}"
+ echo "SET OPTIONAL TEXT: $entity = ${value:-<leer>}"
+ curl -fsS -X POST \
+ -H "Authorization: Bearer $SUPERVISOR_TOKEN" \
+ -H "Content-Type: application/json" \
+ "$API/services/input_text/set_value" \
+ -d "{\"entity_id\":\"$entity\",\"value\":\"$value\"}" >/dev/null
+}
+
 set_number() {
   entity="$1"
   value="$2"
@@ -59,10 +71,10 @@ set_text input_text.se_nf_forecast_now_entity "${FORECAST_NOW_ENTITY:-}"
 set_text input_text.se_nf_weather_entity "$WEATHER_ENTITY"
 set_text input_text.se_nf_live_pv_power_entities "$LIVE_PV_POWER_ENTITIES"
 set_text input_text.se_nf_live_consumption_power_entities "$LIVE_CONSUMPTION_POWER_ENTITIES"
-set_text input_text.se_nf_actual_pv_today_entities "${ACTUAL_PV_TODAY_ENTITIES:-}"
-set_text input_text.se_nf_daily_consumption_entity "${DAILY_CONSUMPTION_ENTITY:-}"
-set_text input_text.se_nf_pv_actual_meter_source_entity "${PV_ACTUAL_METER_SOURCE_ENTITY:-}"
-set_text input_text.se_nf_evcc_battery_mode_entity "${EVCC_BATTERY_MODE_ENTITY:-}"
+set_text_optional input_text.se_nf_actual_pv_today_entities "${ACTUAL_PV_TODAY_ENTITIES:-}"
+set_text_optional input_text.se_nf_daily_consumption_entity "${DAILY_CONSUMPTION_ENTITY:-}"
+set_text_optional input_text.se_nf_pv_actual_meter_source_entity "${PV_ACTUAL_METER_SOURCE_ENTITY:-}"
+set_text_optional input_text.se_nf_evcc_battery_mode_entity "${EVCC_BATTERY_MODE_ENTITY:-}"
 set_text input_text.se_nf_sql_db_path "${SQL_DB_PATH:-/config/home-assistant_v2.db}"
 
 # Einmalige Parameter

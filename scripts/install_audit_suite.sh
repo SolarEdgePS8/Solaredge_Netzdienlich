@@ -1,7 +1,7 @@
 #!/bin/sh
 set -eu
 BASE="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
-DEST="/share/se_nf_release_audit_v296"
+DEST="/share/se_nf_release_audit"
 
 rm -rf "$DEST"
 mkdir -p "$DEST"

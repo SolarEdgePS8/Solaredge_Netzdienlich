@@ -1,4 +1,4 @@
-# Audit-Suite v2.9.6
+# Audit-Suite v2.9.7
 
 Die Python-Dateien sind Prüfwerkzeuge und keine Home-Assistant-Integrationen.
 
@@ -11,13 +11,13 @@ Die Python-Dateien sind Prüfwerkzeuge und keine Home-Assistant-Integrationen.
 
 ## Installation auf Home Assistant
 
-Den kompletten Ordner nach `/share/se_nf_release_audit_v296/` kopieren.
+Den kompletten Ordner nach `/share/se_nf_release_audit/` kopieren.
 
 ## Ausführen
 
 ```bash
-/share/se_nf_release_audit_v296/run_readonly.sh
-/share/se_nf_release_audit_v296/se_nf_manifest_audit.py
+/share/se_nf_release_audit/run_readonly.sh
+/share/se_nf_release_audit/se_nf_manifest_audit.py
 ```
 
 Reports werden unter `/share/se_nf_release_audit_reports/<Zeitstempel>/` abgelegt.

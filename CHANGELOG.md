@@ -1,5 +1,32 @@
 # Changelog
 
+## v2.9.7
+
+### GitHub Issue #4 – optionale Mappings
+
+- `ACTUAL_PV_TODAY_ENTITIES` als Tagesenergie in `Wh`, `kWh` oder `MWh` dokumentiert und validiert.
+- Automatischer Fallback auf `sensor.se_nf_pv_actual_today_meter`, wenn ein gültiger PV-Gesamtzähler konfiguriert ist.
+- `DAILY_CONSUMPTION_ENTITY` eindeutig als kumulierter Tagesverbrauch erklärt; der Durchschnitt wird intern aus der Historie berechnet.
+- `PV_ACTUAL_METER_SOURCE_ENTITY` normalisiert `Wh` und `MWh` nach `kWh`.
+- `EVCC_BATTERY_MODE_ENTITY` bleibt bei leerem, unbekanntem oder nicht vorhandenen Rückkanal sicher inaktiv und liefert Diagnoseattribute.
+- Leere optionale Werte in `site_config.env` können vorhandene alte Helper-Mappings entfernen.
+- First-Run-Check um optionale Mapping-Diagnosen erweitert.
+
+### GitHub Issue #5 – Ladefenster beim Moduswechsel
+
+- Strikte Gültigkeitsregel `Start < Ende` für das aktive Tagesfenster.
+- Gespeicherte Startwerte nach einem Moduswechsel werden nur weiterverwendet, wenn sie zum neuen Fenster passen.
+- Bewusster Moduswechsel kann außerhalb einer aktiven Session die normale Replan-Schwelle einmalig umgehen.
+- Nachlaufzeit verlängert nur eine bereits geöffnete Session und legitimiert keinen neuen Start nach dem regulären Fensterende.
+- Invertierte Anzeigen wie `14:45–14:15` werden verhindert.
+- Zeitfenster-Sensor erhält Diagnoseattribute für Start, Ende, Quelle und Session-Zustand.
+
+### Dashboard und Audit
+
+- Offizielles Lovelace-Dashboard als Bestandteil des Release-Bundles aufgenommen.
+- Audit-Installationspfad auf den versionsneutralen Pfad `/share/se_nf_release_audit` umgestellt.
+- Release-Validierung und Datei-Hashes für v2.9.7 neu erzeugt.
+
 ## v2.9.6
 
 ### YAML-Robustheit
