@@ -12,7 +12,10 @@ cards:
       {% set tomorrow = states('sensor.se_nf_tomorrow_charge_window') %}
       {% set reason = states('sensor.se_nf_decision_reason') %}
       {% set soe = states('sensor.se_nf_battery_soe') %}
-      {% set effective_target = states('sensor.speicher_ziel_ladestand') %}
+      {% set effective_target = states('sensor.se_nf_effective_target_soc_pct') %}
+      {% if effective_target in bad %}
+        {% set effective_target = states('sensor.speicher_ziel_ladestand') %}
+      {% endif %}
       {% if effective_target in bad %}
         {% set effective_target = states('input_number.se_nf_target_soc_pct') %}
       {% endif %}
@@ -68,6 +71,8 @@ cards:
       - type: divider
       - entity: sensor.se_nf_battery_soe
         name: Akku-Stand
+      - entity: sensor.se_nf_effective_target_soc_pct
+        name: Aktiver Ziel-Ladestand
       - entity: sensor.se_nf_needed_energy
         name: Benötigte Energie
       - entity: sensor.se_nf_desired_target
@@ -94,8 +99,8 @@ cards:
           yellow: 20
           green: 50
       - type: gauge
-        entity: input_number.se_nf_target_soc_pct
-        name: Ziel Netzdienlich
+        entity: sensor.se_nf_effective_target_soc_pct
+        name: Aktives Ziel
         min: 0
         max: 100
         needle: true
@@ -223,8 +228,18 @@ cards:
           name: Sicherheitspuffer
         - entity: input_number.se_nf_lifetime_soc_buffer_pct
           name: Zusätzlicher SoC-Puffer
+        - entity: sensor.se_nf_backup_reserve_pct
+          name: Backup-Reserve
+        - entity: sensor.se_nf_night_consumption_7d_dynamic
+          name: Dynamischer Nachtbedarf
+        - entity: sensor.se_nf_daytime_consumption_7d_dynamic
+          name: Dynamischer Tagesbedarf
         - entity: sensor.se_nf_lifetime_night_energy_forecast
-          name: Geplanter Nachtbedarf
+          name: Effektiver Nachtbedarf
+        - entity: sensor.se_nf_resilience_target_pct
+          name: Resilienz-Ziel
+        - entity: binary_sensor.se_nf_resilience_capacity_risk
+          name: Kapazitätsrisiko
         - entity: input_boolean.se_nf_lifetime_target_reached
           name: Ziel erreicht
 

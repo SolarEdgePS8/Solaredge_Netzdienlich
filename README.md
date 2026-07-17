@@ -1,4 +1,4 @@
-# SolarEdge Netzdienlich Package v2.9.7
+# SolarEdge Netzdienlich Package v2.9.8
 
 Home-Assistant-Package zur planbaren und netzdienlichen Steuerung eines SolarEdge-Speichers.
 
@@ -12,9 +12,9 @@ Dieses Repository ist ein **Home-Assistant-Package-Bundle**. Es ist keine HACS-I
 ## Struktur
 
 ```text
-package/      vier Home-Assistant-Package-Dateien
+package/      fünf Home-Assistant-Package-Dateien
 config/       Vorlage für die einmalige Konfiguration einer neuen Instanz
-scripts/      Installation, Konfiguration, Discovery und erster Check
+scripts/      Installation, Runtime-Helfer, Konfiguration, Discovery und Checks
 audit/        Read-only-, Manifest- und optionaler Safe-A/B-Test
 dashboard/    portables Lovelace-Dashboard und Installationshinweise
 docs/         sechs fortlaufend nummerierte Anleitungen
@@ -36,7 +36,24 @@ Kurzablauf:
 8. Read-only-Audit ausführen.
 9. Master-Schalter erst danach aktivieren.
 
-## Optionale Mappings in v2.9.7
+## Dynamischer Modus „Akku schonen“ in v2.9.8
+
+v2.9.8 ermittelt Nacht- und Tagesverbrauch aus zwei lückenlos verbundenen,
+dynamischen 7-Tage-Fenstern. Die gemeinsame Grenze folgt dem Sonnenaufgang
+plus einem einstellbaren PV-Bereitschaftsversatz. Der Median ist robust gegen
+einzelne Ausreißertage.
+
+Das Ziel berücksichtigt Backup-Reserve, gepufferten Tag-/Nachtbedarf,
+Sicherheitsenergie sowie die verfügbaren PV-Prognosen für morgen und – sofern
+vorhanden – übermorgen. `sensor.se_nf_effective_target_soc_pct` ist die
+kanonische Zielquelle; `sensor.speicher_ziel_ladestand` bleibt ein identischer
+Kompatibilitätsalias.
+
+Ohne Backup-System bleibt `input_text.se_nf_backup_reserve_entity` leer. Dann
+verwendet das Package `input_number.se_nf_backup_reserve_fallback_pct`,
+standardmäßig `0 %`.
+
+## Optionale Mappings
 
 - `ACTUAL_PV_TODAY_ENTITIES`: heutiger PV-Ertrag in `Wh`, `kWh` oder `MWh`.
 - `DAILY_CONSUMPTION_ENTITY`: heutiger kumulierter Hausverbrauch, kein Durchschnitt.
@@ -48,7 +65,7 @@ Ist kein direkter Tagesertragssensor vorhanden, kann das Package den intern erze
 
 ## Ladefenster und Moduswechsel
 
-v2.9.7 prüft strikt, dass ein aktiver Start vor dem aktuellen Fensterende liegt. Beim bewussten Wechsel zwischen `Akku schonen` und `Netzdienlich laden` wird außerhalb einer laufenden Session neu geplant. Eine aktive Session wird nicht rückwirkend verschoben.
+v2.9.8 prüft strikt, dass ein aktiver Start vor dem aktuellen Fensterende liegt. Beim bewussten Wechsel zwischen `Akku schonen` und `Netzdienlich laden` wird außerhalb einer laufenden Session neu geplant. Eine aktive Session wird nicht rückwirkend verschoben.
 
 Das Dashboard unter [`dashboard/`](dashboard/) zeigt Kandidat, gespeicherten Start, aktiven Start, Fensterende und Session-Zustand gemeinsam an.
 

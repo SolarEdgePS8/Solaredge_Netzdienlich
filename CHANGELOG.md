@@ -1,5 +1,46 @@
 # Changelog
 
+## v2.9.8
+
+### Dynamisches und resilientes Akku-schonen-Ziel
+
+- Nacht- und Tagesverbrauch werden aus zwei lückenlos verbundenen dynamischen
+  7-Tage-Fenstern als Median ermittelt.
+- Die gemeinsame Grenze folgt Sonnenaufgang plus konfigurierbarem
+  PV-Bereitschaftsversatz.
+- Das Ziel berücksichtigt Backup-Reserve, gepufferten Tag-/Nachtbedarf,
+  Sicherheitsenergie und verfügbare PV-Prognosen bis zu 48 Stunden.
+- `sensor.se_nf_effective_target_soc_pct` ist die kanonische Zielquelle;
+  `sensor.speicher_ziel_ladestand` bleibt ein identischer Alias.
+- Dashboard-Kopf und Ziel-Gauge zeigen den aktiven Zielwert statt immer den
+  festen netzdienlichen Einstellwert.
+
+### GitHub Issues #5 und #6
+
+- Moduswechsel planen außerhalb einer laufenden Session Ziel und Startzeit
+  konsistent neu; alle drei Modi wurden in einer vollständigen Live-Abnahme
+  geprüft.
+- Der von der Konfiguration referenzierte
+  `se_nf_load_forecast_7d_cached.py` sowie die neuen Tag-/Nacht-Helfer werden
+  jetzt mit ausgeliefert und vom Installer nach `/config` kopiert.
+
+### Portabilität und Installation
+
+- Backup-Reserve ist für Anlagen ohne Backup-System optional und besitzt einen
+  konfigurierbaren Fallback.
+- Die Critical-Deficit-Logik nutzt kanonische, gemappte SoE-/Reserve-Sensoren.
+- Doppelte Refresh-Sidecars wurden zu einer Automation zusammengeführt.
+- Eine globale Unterdrückung fremder Home-Assistant-Logs ist nicht Teil des
+  Releases.
+- Der ungenutzte parallele Min-/Max-Zielpfad aus
+  `se_nf_09_lifetime_target_helpers.yaml` wird beim Update gesichert und
+  deaktiviert.
+- Installer, Manifeste, Audit-Suite und Dokumentation enthalten alle fünf
+  Packages und drei Runtime-Helfer.
+- Der ausführende Modustester akzeptiert den beabsichtigten `5000 W`-
+  Fail-open-Zustand bei ausgeschaltetem Master und isoliert die physischen
+  Writer vor jeder Testumschaltung.
+
 ## v2.9.7
 
 ### GitHub Issue #4 – optionale Mappings

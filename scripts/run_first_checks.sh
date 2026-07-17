@@ -3,6 +3,25 @@ set -eu
 : "${SUPERVISOR_TOKEN:?SUPERVISOR_TOKEN fehlt}"
 API="http://supervisor/core/api"
 
+for helper in \
+  /config/se_nf_load_forecast_7d_cached.py \
+  /config/se_nf_night_forecast_7d.py \
+  /config/se_nf_daytime_forecast_7d.py
+do
+  [ -r "$helper" ] || {
+    echo "FEHLT: benötigter Runtime-Helfer $helper"
+    exit 1
+  }
+  python3 - "$helper" <<'PY'
+from pathlib import Path
+import sys
+
+path = Path(sys.argv[1])
+compile(path.read_text(encoding="utf-8"), str(path), "exec")
+PY
+  echo "RUNTIME-HELFER OK: $helper"
+done
+
 for entity in \
   sensor.se_nf_config_check \
   sensor.se_nf_sanity_check \
@@ -14,6 +33,11 @@ for entity in \
   sensor.se_nf_charge_limit_age_s \
   sensor.se_nf_today_charge_window \
   sensor.se_nf_decision_reason \
+  sensor.se_nf_night_consumption_7d_dynamic \
+  sensor.se_nf_daytime_consumption_7d_dynamic \
+  sensor.se_nf_resilience_target_pct \
+  sensor.se_nf_effective_target_soc_pct \
+  sensor.speicher_ziel_ladestand \
   input_boolean.se_netzdienlich_enabled
 do
   echo
@@ -85,5 +109,31 @@ print("state=", window.get("state"))
 print("window_valid=", attrs.get("window_valid"))
 print("start=", attrs.get("start_timestamp"), "end=", attrs.get("end_timestamp"))
 print("source=", attrs.get("selected_start_source"), "session=", attrs.get("session_state"))
-PY
 
+print("\n=== ZIELPFAD V2.9.8 ===")
+resilience = state("sensor.se_nf_resilience_target_pct")
+effective = state("sensor.se_nf_effective_target_soc_pct")
+compatibility = state("sensor.speicher_ziel_ladestand")
+print("resilience_target=", resilience)
+print("effective_target=", effective)
+print("compatibility_target=", compatibility)
+print("targets_equal=", effective == compatibility)
+if effective != compatibility:
+    raise SystemExit("FEHLER: Zielpfade sind nicht identisch")
+
+print("\n=== DYNAMISCHE HISTORIE ===")
+for entity_id in (
+    "sensor.se_nf_night_consumption_7d_dynamic",
+    "sensor.se_nf_daytime_consumption_7d_dynamic",
+):
+    item = get(entity_id) or {}
+    item_attrs = item.get("attributes", {})
+    print(
+        entity_id,
+        "state=", item.get("state", "not_found"),
+        "valid=", item_attrs.get("valid"),
+        "source=", item_attrs.get("source"),
+        "window=", item_attrs.get("window_start"),
+        "-", item_attrs.get("window_end"),
+    )
+PY

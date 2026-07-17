@@ -64,9 +64,10 @@ der Darstellung.
 ## Portabilität
 
 Das Dashboard verwendet nach Möglichkeit nur `se_nf_*`-Entities des Packages.
-Für den effektiven Ziel-Ladestand versucht die Kopfkarte zuerst
-`sensor.speicher_ziel_ladestand` und fällt andernfalls auf
-`input_number.se_nf_target_soc_pct` zurück.
+Für den aktiven Ziel-Ladestand verwenden Kopfkarte und Gauge zuerst
+`sensor.se_nf_effective_target_soc_pct`, danach den identischen
+Kompatibilitätsalias `sensor.speicher_ziel_ladestand` und nur bei fehlenden
+Sensoren den festen netzdienlichen Einstellwert als Fallback.
 
 Falls eine optionale Entity in einer Installation nicht existiert, kann die
 betreffende Zeile aus der Entities-Karte entfernt werden.

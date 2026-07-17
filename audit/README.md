@@ -1,11 +1,11 @@
-# Audit-Suite v2.9.7
+# Audit-Suite v2.9.8
 
 Die Python-Dateien sind Prüfwerkzeuge und keine Home-Assistant-Integrationen.
 
 ## Welches Script wofür?
 
 - `run_readonly.sh`: sicherer Standardtest; verändert keine Helfer und schreibt nicht auf SolarEdge.
-- `se_nf_manifest_audit.py`: prüft nur die vier Release-Package-Dateien auf interne Abhängigkeiten und Portabilität.
+- `se_nf_manifest_audit.py`: prüft alle Release-Packages und die drei erforderlichen Runtime-Helfer auf Vollständigkeit, interne Abhängigkeiten und Portabilität.
 - `run_safe_ab.sh`: verändert temporär ausgewählte `input_*`-Helfer, vergleicht die Auswirkungen und stellt die Werte zurück. Nur bei ruhigem Systemzustand verwenden.
 - `run_all.sh`: kombiniert Read-only und Safe-A/B. Für die Erstinstallation ist zunächst `run_readonly.sh` ausreichend.
 

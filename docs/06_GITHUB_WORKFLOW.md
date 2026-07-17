@@ -42,11 +42,11 @@ FileZilla kann weiterhin für Backups oder einmalige Dateiübertragungen verwend
 Der Release-Builder erzeugt unter `/share` einen sauberen Repo-Ordner. Zum Ersetzen eines lokalen Git-Clones:
 
 ```bash
-rsync -a --delete --exclude '.git/'   /share/Solaredge_Netzdienlich_v2.9.7_repo/   /PFAD/ZUM/GEKLONTEN/REPO/
+rsync -a --delete --exclude '.git/'   /share/Solaredge_Netzdienlich_v2.9.8_repo/   /PFAD/ZUM/GEKLONTEN/REPO/
 
 cd /PFAD/ZUM/GEKLONTEN/REPO
 git add -A
-git commit -m "Release v2.9.7"
+git commit -m "Release v2.9.8"
 git push
 ```
 

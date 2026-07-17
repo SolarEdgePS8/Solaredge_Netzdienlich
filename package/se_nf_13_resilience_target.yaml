@@ -1,0 +1,364 @@
+template:
+  - sensor:
+      - name: "SE NF Historical Daytime Consumption 7d Dynamic"
+        unique_id: se_nf_historical_daytime_consumption_7d_dynamic
+        unit_of_measurement: "kWh"
+        device_class: energy
+        icon: mdi:home-sun
+        state: >-
+          {% set raw = states('sensor.se_nf_daytime_consumption_7d_dynamic') %}
+          {% set valid = state_attr('sensor.se_nf_daytime_consumption_7d_dynamic', 'valid') | default(false, true) %}
+          {% set bad = ['unknown','unavailable','none','None',''] %}
+          {% set total = state_attr('sensor.se_nf_load_forecast_7d_cached', 'avg_day_total') | float(states('input_number.se_nf_manual_daily_consumption_kwh') | float(0)) %}
+          {% set night = states('sensor.se_nf_lifetime_night_energy_forecast') | float(0) %}
+          {% if valid and raw not in bad and (raw | float(0)) > 0 %}
+            {{ raw | float(0) | round(2) }}
+          {% else %}
+            {{ ([total - night, 0] | max) | round(2) }}
+          {% endif %}
+        attributes:
+          source: >-
+            {% set raw = states('sensor.se_nf_daytime_consumption_7d_dynamic') %}
+            {% set valid = state_attr('sensor.se_nf_daytime_consumption_7d_dynamic', 'valid') | default(false, true) %}
+            {{ state_attr('sensor.se_nf_daytime_consumption_7d_dynamic', 'source') if valid and raw not in ['unknown','unavailable','none','None',''] and (raw | float(0)) > 0 else 'avg_day_total_minus_night_fallback' }}
+          valid_days: "{{ state_attr('sensor.se_nf_daytime_consumption_7d_dynamic', 'valid_days') }}"
+          window_start: "{{ state_attr('sensor.se_nf_daytime_consumption_7d_dynamic', 'window_start') }}"
+          window_end: "{{ state_attr('sensor.se_nf_daytime_consumption_7d_dynamic', 'window_end') }}"
+          minimum_kwh: "{{ state_attr('sensor.se_nf_daytime_consumption_7d_dynamic', 'minimum_kwh') }}"
+          maximum_kwh: "{{ state_attr('sensor.se_nf_daytime_consumption_7d_dynamic', 'maximum_kwh') }}"
+          mean_kwh: "{{ state_attr('sensor.se_nf_daytime_consumption_7d_dynamic', 'mean_kwh') }}"
+          median_kwh: "{{ state_attr('sensor.se_nf_daytime_consumption_7d_dynamic', 'median_kwh') }}"
+          error: "{{ state_attr('sensor.se_nf_daytime_consumption_7d_dynamic', 'error') }}"
+      - name: "SE NF Resilience Required Energy"
+        unique_id: se_nf_resilience_required_energy
+        unit_of_measurement: "kWh"
+        device_class: energy
+        icon: mdi:battery-clock-outline
+        state: >-
+          {% set night =
+            states(
+              'sensor.se_nf_lifetime_night_energy_forecast'
+            ) | float(0)
+          %}
+          {% set daytime =
+            states(
+              'sensor.se_nf_historical_daytime_consumption_7d_dynamic'
+            ) | float(0)
+          %}
+          {% set factor =
+            1
+            + (
+                states(
+                  'input_number.se_nf_lifetime_soc_buffer_pct'
+                ) | float(0)
+              ) / 100
+          %}
+          {% set n = night * factor %}
+          {% set d = daytime * factor %}
+          {% set pv1 =
+            states(
+              'sensor.se_nf_pv_forecast_tomorrow_weather_adjusted'
+            ) | float(0)
+          %}
+          {% set src2 =
+            states(
+              'sensor.se_nf_adaptive_pv_overmorrow_source'
+            )
+          %}
+          {% set valid2 =
+            src2.startswith('sensor.')
+            and states(src2)
+                not in ['unknown','unavailable','none','None','']
+          %}
+          {% set pv2 =
+            (
+              states('sensor.se_nf_adaptive_pv_overmorrow')
+              | float(0)
+            )
+            *
+            (
+              states(
+                'sensor.se_nf_weather_planning_factor_tomorrow'
+              ) | float(1)
+            )
+            if valid2
+            else 0
+          %}
+          {% set s1 = n %}
+          {% set s2 = s1 + d - pv1 %}
+          {% set s3 = s2 + n %}
+          {% set s4 = s3 + d - pv2 %}
+          {% set base =
+            [0, s1, s2, s3, s4] | max
+            if valid2
+            else [0, s1, s2, s3] | max
+          %}
+          {% set safety =
+            states(
+              'input_number.se_nf_lifetime_safety_kwh'
+            ) | float(0)
+          %}
+          {{ (base + safety) | round(2) }}
+        attributes:
+          source: "cumulative_segmented_forecast"
+          night_kwh: >-
+            {{
+              states(
+                'sensor.se_nf_lifetime_night_energy_forecast'
+              )
+            }}
+          daytime_kwh: >-
+            {{
+              states(
+                'sensor.se_nf_historical_daytime_consumption_7d_dynamic'
+              )
+            }}
+          daytime_source: >-
+            {{
+              state_attr(
+                'sensor.se_nf_historical_daytime_consumption_7d_dynamic',
+                'source'
+              )
+            }}
+          buffer_pct: >-
+            {{
+              states(
+                'input_number.se_nf_lifetime_soc_buffer_pct'
+              )
+            }}
+          buffered_night_kwh: >-
+            {% set value =
+              states(
+                'sensor.se_nf_lifetime_night_energy_forecast'
+              ) | float(0)
+            %}
+            {% set buffer =
+              states(
+                'input_number.se_nf_lifetime_soc_buffer_pct'
+              ) | float(0)
+            %}
+            {{ (value * (1 + buffer / 100)) | round(2) }}
+          buffered_daytime_kwh: >-
+            {% set value =
+              states(
+                'sensor.se_nf_historical_daytime_consumption_7d_dynamic'
+              ) | float(0)
+            %}
+            {% set buffer =
+              states(
+                'input_number.se_nf_lifetime_soc_buffer_pct'
+              ) | float(0)
+            %}
+            {{ (value * (1 + buffer / 100)) | round(2) }}
+          pv_tomorrow_kwh: >-
+            {{
+              states(
+                'sensor.se_nf_pv_forecast_tomorrow_weather_adjusted'
+              )
+            }}
+          pv_overmorrow_source: >-
+            {{
+              states(
+                'sensor.se_nf_adaptive_pv_overmorrow_source'
+              )
+            }}
+          pv_overmorrow_valid: >-
+            {% set src =
+              states(
+                'sensor.se_nf_adaptive_pv_overmorrow_source'
+              )
+            %}
+            {{
+              src.startswith('sensor.')
+              and states(src)
+                  not in
+                  ['unknown','unavailable','none','None','']
+            }}
+          pv_overmorrow_effective_kwh: >-
+            {% set src =
+              states(
+                'sensor.se_nf_adaptive_pv_overmorrow_source'
+              )
+            %}
+            {% set valid =
+              src.startswith('sensor.')
+              and states(src)
+                  not in
+                  ['unknown','unavailable','none','None','']
+            %}
+            {% set raw =
+              states(
+                'sensor.se_nf_adaptive_pv_overmorrow'
+              ) | float(0)
+            %}
+            {% set weather =
+              states(
+                'sensor.se_nf_weather_planning_factor_tomorrow'
+              ) | float(1)
+            %}
+            {{ ((raw * weather) if valid else 0) | round(2) }}
+          planning_horizon: >-
+            {% set src =
+              states(
+                'sensor.se_nf_adaptive_pv_overmorrow_source'
+              )
+            %}
+            {% set valid =
+              src.startswith('sensor.')
+              and states(src)
+                  not in
+                  ['unknown','unavailable','none','None','']
+            %}
+            {{
+              'through_day_2'
+              if valid
+              else 'through_night_2'
+            }}
+          safety_kwh: >-
+            {{
+              states(
+                'input_number.se_nf_lifetime_safety_kwh'
+              )
+            }}
+
+      - name: "SE NF Resilience Target Pct"
+        unique_id: se_nf_resilience_target_pct
+        unit_of_measurement: "%"
+        state_class: measurement
+        icon: mdi:battery-heart-variant
+        state: >-
+          {% set cap =
+            states(
+              'sensor.se_nf_battery_capacity_kwh'
+            ) | float(0)
+          %}
+          {% set reserve =
+            states(
+              'sensor.se_nf_backup_reserve_pct'
+            ) | float(0)
+          %}
+          {% set required =
+            states(
+              'sensor.se_nf_resilience_required_energy'
+            ) | float(0)
+          %}
+          {% set minimum =
+            states(
+              'input_number.se_nf_lifetime_min_soc_pct'
+            ) | float(45)
+          %}
+          {% set maximum =
+            states(
+              'input_number.se_nf_lifetime_max_soc_pct'
+            ) | float(85)
+          %}
+          {% set raw =
+            reserve + required / cap * 100
+            if cap > 0
+            else maximum
+          %}
+          {{
+            [[raw, minimum] | max, maximum]
+            | min
+            | round(1)
+          }}
+        attributes:
+          source: "resilience_cumulative_24_48h"
+          raw_target_pct: >-
+            {% set cap =
+              states(
+                'sensor.se_nf_battery_capacity_kwh'
+              ) | float(0)
+            %}
+            {% set reserve =
+              states(
+                'sensor.se_nf_backup_reserve_pct'
+              ) | float(0)
+            %}
+            {% set required =
+              states(
+                'sensor.se_nf_resilience_required_energy'
+              ) | float(0)
+            %}
+            {{
+              (reserve + required / cap * 100) | round(1)
+              if cap > 0
+              else 'unknown'
+            }}
+          required_energy_kwh: >-
+            {{
+              states(
+                'sensor.se_nf_resilience_required_energy'
+              )
+            }}
+          uncovered_at_max_kwh: >-
+            {% set required =
+              states(
+                'sensor.se_nf_resilience_required_energy'
+              ) | float(0)
+            %}
+            {% set cap =
+              states(
+                'sensor.se_nf_battery_capacity_kwh'
+              ) | float(0)
+            %}
+            {% set reserve =
+              states(
+                'sensor.se_nf_backup_reserve_pct'
+              ) | float(0)
+            %}
+            {% set maximum =
+              states(
+                'input_number.se_nf_lifetime_max_soc_pct'
+              ) | float(85)
+            %}
+            {% set available =
+              cap
+              * ([maximum - reserve, 0] | max)
+              / 100
+            %}
+            {{
+              ([required - available, 0] | max)
+              | round(2)
+            }}
+          planning_horizon: >-
+            {{
+              state_attr(
+                'sensor.se_nf_resilience_required_energy',
+                'planning_horizon'
+              )
+            }}
+
+  - binary_sensor:
+      - name: "SE NF Resilience Capacity Risk"
+        unique_id: se_nf_resilience_capacity_risk
+        device_class: problem
+        icon: mdi:battery-alert-variant-outline
+        state: >-
+          {{
+            state_attr(
+              'sensor.se_nf_resilience_target_pct',
+              'uncovered_at_max_kwh'
+            ) | float(0) > 0.10
+          }}
+        attributes:
+          uncovered_kwh: >-
+            {{
+              state_attr(
+                'sensor.se_nf_resilience_target_pct',
+                'uncovered_at_max_kwh'
+              )
+            }}
+          message: >-
+            {% set gap =
+              state_attr(
+                'sensor.se_nf_resilience_target_pct',
+                'uncovered_at_max_kwh'
+              ) | float(0)
+            %}
+            {{
+              'Bedarf übersteigt nutzbare Energie bis Max-SoC.'
+              if gap > 0.10
+              else
+              'Bedarf innerhalb des Max-SoC abdeckbar.'
+            }}

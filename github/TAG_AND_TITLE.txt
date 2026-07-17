@@ -1,11 +1,11 @@
 Tag:
-v2.9.7
+v2.9.8
 
 Release title:
-SolarEdge Netzdienlich Package v2.9.7
+SolarEdge Netzdienlich Package v2.9.8
 
 Primary asset:
-SolarEdge_Netzdienlich_Package_v2.9.7.zip
+SolarEdge_Netzdienlich_Package_v2.9.8.zip
 
 Checksum:
-SolarEdge_Netzdienlich_Package_v2.9.7.zip.sha256
+SolarEdge_Netzdienlich_Package_v2.9.8.zip.sha256

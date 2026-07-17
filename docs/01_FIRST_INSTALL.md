@@ -39,6 +39,11 @@ chmod +x scripts/*.sh
 ha core check
 ```
 
+Der Installer kopiert alle fünf Package-Dateien nach `/config/packages`,
+prüft die drei lokalen Python-Helfer syntaktisch und installiert sie unter
+`/config`. Vorhandene Dateien werden unter
+`/share/se_nf_install_backup_<Zeit>/` gesichert.
+
 Nur bei erfolgreichem Check:
 
 ```bash

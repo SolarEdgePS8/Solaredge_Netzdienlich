@@ -11,7 +11,6 @@ Jede Home-Assistant-Instanz verwendet andere Entity-IDs. Das Package nutzt desha
 | SolarEdge Charge-Limit | `input_text.se_nf_charge_limit_entity` | `W`, beschreibbare `number` |
 | Akku-SoE | `input_text.se_nf_battery_soe_entity` | `%` |
 | Akkukapazität | `input_text.se_nf_battery_capacity_entity` | `kWh` |
-| Backup-Reserve | `input_text.se_nf_backup_reserve_entity` | `%` |
 | verbleibende PV heute | `input_text.se_nf_pv_today_remaining_entity` | `kWh` |
 | PV gesamt heute | `input_text.se_nf_pv_today_total_entity` | `kWh` |
 | PV morgen | `input_text.se_nf_pv_tomorrow_entity` | `kWh` |
@@ -65,6 +64,14 @@ Das Package benötigt an dieser Stelle Momentanleistung, keine Energie.
 <!-- ISSUE-4-OPTIONAL-MAPPINGS-START -->
 ## Optionale Mappings
 
+### `BACKUP_RESERVE_ENTITY`
+
+Optionaler, dynamisch einstellbarer Backup-Reserve-Sensor in Prozent, zum
+Beispiel eine beschreibbare `number` der SolarEdge-Integration. Anlagen ohne
+Backup-System lassen das Mapping leer. In diesem Fall verwendet das Package
+`input_number.se_nf_backup_reserve_fallback_pct`; der empfohlene Ausgangswert
+ohne reservierte Backup-Kapazität ist `0 %`.
+
 ### `ACTUAL_PV_TODAY_ENTITIES`
 
 Ein Sensor oder eine kommaseparierte Fallback-Liste für den **seit Mitternacht
@@ -101,8 +108,9 @@ Mapping lösen keine Ladeanforderung aus.
 Läuft evcc extern und liest ausschließlich Werte aus Home Assistant, bleibt das
 Mapping leer.
 
-Ab v2.9.7 schreiben leere Werte
-in `site_config.env` die vier optionalen Helper tatsächlich leer. Dadurch lassen
+Ab v2.9.8 schreiben leere Werte
+in `site_config.env` auch das optionale Backup-Mapping und die übrigen
+optionalen Helper tatsächlich leer. Dadurch lassen
 sich alte optionale Mappings entfernen.
 <!-- ISSUE-4-OPTIONAL-MAPPINGS-END -->
 

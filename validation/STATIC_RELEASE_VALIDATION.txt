@@ -1,118 +1,51 @@
-SolarEdge Netzdienlich v2.9.7 – statische Release-Prüfung
-Build: 2026-07-16
+SolarEdge Netzdienlich v2.9.8 - statische Release-Pruefung
+Stand: 2026-07-17 14:35 UTC
 
-PASS  package_yaml_parse
-PASS  dashboard_yaml_parse
-PASS  duplicate_unique_ids  []
-PASS  single_top_level_automation
-PASS  marker_utility_meter_fallback
-PASS  marker_window_valid:
-PASS  marker_mode_change:
-PASS  marker_mapping_status:
-PASS  marker_candidate_valid:
-PASS  forbidden_LOCAL HOTFIX
-PASS  forbidden_NOT RELEASED
-PASS  forbidden_PENDING_NOT_RELEASED
-PASS  sh_n_audit/run_all.sh
-PASS  sh_n_audit/run_readonly.sh
-PASS  sh_n_audit/run_safe_ab.sh
-PASS  sh_n_scripts/apply_site_config.sh
-PASS  sh_n_scripts/install_audit_suite.sh
-PASS  sh_n_scripts/install_package.sh
-PASS  sh_n_scripts/run_first_checks.sh
-PASS  py_compile_audit/se_nf_manifest_audit.py
-PASS  py_compile_audit/se_nf_release_audit.py
-PASS  py_compile_scripts/discover_entities.py
-PASS  manifest_four_files  ['package/solaredge_netzdienlich.yaml', 'package/se_nf_07_writer_safety.yaml', 'package/se_nf_08_planning_helpers.yaml', 'package/se_nf_09_lifetime_target_helpers.yaml']
-PASS  manifest_exists_package/solaredge_netzdienlich.yaml
-PASS  manifest_exists_package/se_nf_07_writer_safety.yaml
-PASS  manifest_exists_package/se_nf_08_planning_helpers.yaml
-PASS  manifest_exists_package/se_nf_09_lifetime_target_helpers.yaml
-PASS  required_.gitattributes
-PASS  required_.gitignore
-PASS  required_.github/ISSUE_TEMPLATE/bug_report.md
-PASS  required_README.md
-PASS  required_CHANGELOG.md
-PASS  required_CONTRIBUTING.md
-PASS  required_LICENSE
-PASS  required_release_manifest.txt
-PASS  required_package/solaredge_netzdienlich.yaml
-PASS  required_package/se_nf_07_writer_safety.yaml
-PASS  required_package/se_nf_08_planning_helpers.yaml
-PASS  required_package/se_nf_09_lifetime_target_helpers.yaml
-PASS  required_config/site_config.env.example
-PASS  required_scripts/apply_site_config.sh
-PASS  required_scripts/install_package.sh
-PASS  required_scripts/install_audit_suite.sh
-PASS  required_scripts/run_first_checks.sh
-PASS  required_docs/01_FIRST_INSTALL.md
-PASS  required_docs/02_UPDATE_EXISTING.md
-PASS  required_docs/03_ENTITY_MAPPING.md
-PASS  required_docs/04_AUDIT.md
-PASS  required_docs/05_TROUBLESHOOTING.md
-PASS  required_docs/06_GITHUB_WORKFLOW.md
-PASS  required_dashboard/README.md
-PASS  required_dashboard/solaredge_netzdienlich_dashboard.yaml
-PASS  required_github/PUBLISH.md
-PASS  required_github/TAG_AND_TITLE.txt
-PASS  required_github/RELEASE_BODY_v2.9.7.md
-PASS  required_validation/PRIVACY_NOTE.md
-PASS  required_validation/RELEASE_VALIDATION.json
-PASS  required_validation/RUNTIME_TEST_ISSUES_4_5.md
-PASS  clean_.gitattributes  .gitattributes
-PASS  clean_.gitignore  .gitignore
-PASS  clean_CHANGELOG.md  CHANGELOG.md
-PASS  clean_CONTRIBUTING.md  CONTRIBUTING.md
-PASS  clean_LICENSE  LICENSE
-PASS  clean_README.md  README.md
-PASS  clean_release_manifest.txt  release_manifest.txt
-PASS  clean_audit/README.md  audit/README.md
-PASS  clean_audit/README.txt  audit/README.txt
-PASS  clean_audit/release_manifest.txt  audit/release_manifest.txt
-PASS  clean_audit/run_all.sh  audit/run_all.sh
-PASS  clean_audit/run_readonly.sh  audit/run_readonly.sh
-PASS  clean_audit/run_safe_ab.sh  audit/run_safe_ab.sh
-PASS  clean_audit/se_nf_manifest_audit.py  audit/se_nf_manifest_audit.py
-PASS  clean_audit/se_nf_release_audit.py  audit/se_nf_release_audit.py
-PASS  clean_config/site_config.env.example  config/site_config.env.example
-PASS  clean_docs/01_FIRST_INSTALL.md  docs/01_FIRST_INSTALL.md
-PASS  clean_docs/02_UPDATE_EXISTING.md  docs/02_UPDATE_EXISTING.md
-PASS  clean_docs/03_ENTITY_MAPPING.md  docs/03_ENTITY_MAPPING.md
-PASS  clean_docs/04_AUDIT.md  docs/04_AUDIT.md
-PASS  clean_docs/05_TROUBLESHOOTING.md  docs/05_TROUBLESHOOTING.md
-PASS  clean_docs/06_GITHUB_WORKFLOW.md  docs/06_GITHUB_WORKFLOW.md
-PASS  clean_github/PUBLISH.md  github/PUBLISH.md
-PASS  clean_github/TAG_AND_TITLE.txt  github/TAG_AND_TITLE.txt
-PASS  clean_github/RELEASE_BODY_v2.9.7.md  github/RELEASE_BODY_v2.9.7.md
-PASS  clean_package/se_nf_07_writer_safety.yaml  package/se_nf_07_writer_safety.yaml
-PASS  clean_package/se_nf_08_planning_helpers.yaml  package/se_nf_08_planning_helpers.yaml
-PASS  clean_package/se_nf_09_lifetime_target_helpers.yaml  package/se_nf_09_lifetime_target_helpers.yaml
-PASS  clean_package/solaredge_netzdienlich.yaml  package/solaredge_netzdienlich.yaml
-PASS  clean_scripts/apply_site_config.sh  scripts/apply_site_config.sh
-PASS  clean_scripts/discover_entities.py  scripts/discover_entities.py
-PASS  clean_scripts/install_audit_suite.sh  scripts/install_audit_suite.sh
-PASS  clean_scripts/install_package.sh  scripts/install_package.sh
-PASS  clean_scripts/run_first_checks.sh  scripts/run_first_checks.sh
-PASS  clean_validation/FILE_HASHES_SHA256.txt  validation/FILE_HASHES_SHA256.txt
-PASS  clean_validation/PRIVACY_NOTE.md  validation/PRIVACY_NOTE.md
-PASS  clean_validation/RELEASE_VALIDATION.json  validation/RELEASE_VALIDATION.json
-PASS  clean_validation/RUNTIME_TEST_ISSUES_4_5.md  validation/RUNTIME_TEST_ISSUES_4_5.md
-PASS  clean_dashboard/solaredge_netzdienlich_dashboard.yaml  dashboard/solaredge_netzdienlich_dashboard.yaml
-PASS  clean_dashboard/README.md  dashboard/README.md
-PASS  clean_.github/ISSUE_TEMPLATE/bug_report.md  .github/ISSUE_TEMPLATE/bug_report.md
-PASS  version_README.md
-PASS  version_CHANGELOG.md
-PASS  version_github/PUBLISH.md
-PASS  version_github/TAG_AND_TITLE.txt
-PASS  version_github/RELEASE_BODY_v2.9.7.md
-PASS  version_validation/RELEASE_VALIDATION.json
-PASS  no_old_release_body
-PASS  neutral_audit_path
+[ARCHIVE SOURCE REVIEW]
+PASS  ZIP path and member safety
+PASS  64/64 source-manifest payload hashes
+PASS  no secrets, tokens, email addresses or private hosts
 
-GATE_STATIC_MAIN_CRITICAL: PASS
-critical_main: 0
-GATE_RUNTIME: PASS (local HA evidence)
-runtime_fail_count: 0
-GATE_MANIFEST: PASS_OR_EXTERNAL_REVIEW
-critical_internal: 0
-GATE_DASHBOARD: PASS
+[CLEAN RELEASE LAYOUT]
+PASS  release manifest unique and complete
+PASS  five active package files
+PASS  three referenced runtime Python helpers shipped
+PASS  obsolete target/refresh/logging sidecars excluded
+PASS  issue #6 helper se_nf_load_forecast_7d_cached.py shipped
+
+[STATIC CONFIGURATION]
+PASS  YAML parse: 5/5
+PASS  duplicate unique_id: 0
+PASS  duplicate automation id: 0
+PASS  unresolved internal se_nf references: 0
+PASS  backup fallback helper defined
+PASS  direct hard-coded critical SoE/reserve references removed
+PASS  exactly one dynamic history refresh automation
+PASS  incompatible energy state_class combinations: 0
+PASS  target-bound sanity guards present
+PASS  dashboard target gauge uses canonical effective target
+
+[CODE AND INSTALLER]
+PASS  Python syntax: 5/5 runtime and acceptance files
+PASS  POSIX shell syntax: all release scripts
+PASS  isolated fresh/update installation
+PASS  replaced files backed up
+PASS  obsolete sidecars moved to recoverable backup
+
+[MODEL TESTS]
+PASS  synthetic recorder split: night 4.0 kWh, daytime 6.0 kWh
+PASS  missing-database fallbacks are safe JSON
+PASS  randomized resilience scenarios: 100000
+PASS  target bounds
+PASS  less PV never reduces required target
+PASS  more buffer never reduces required target
+PASS  risk flag matches uncovered capacity
+
+[PRIVACY]
+PASS  no credentials or private network addresses
+PASS  raw installation telemetry excluded from repository
+
+[RESULT]
+static_checks: 36/36 PASS
+offline_release_gate: PASS
+final_home_assistant_retest: PASS

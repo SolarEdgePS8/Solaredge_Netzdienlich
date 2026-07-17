@@ -1,18 +1,21 @@
-# SolarEdge Netzdienlich Package v2.9.7
-# Fixes GitHub Issues #4 and #5
+# SolarEdge Netzdienlich v2.9.8
+# Issue #4: optionale Mappings, PV-Tageszaehler-Fallback und EVCC-Diagnose
+# Issue #5: strikte Zeitfenster-Gueltigkeit, konsistenter Ziel-SoC und
+#           sicherer Moduswechsel
+# Issue #6: alle zur Laufzeit benoetigten Python-Helfer werden ausgeliefert
+# v2.9.8: dynamische Tag-/Nacht-Historie und resilientes 24-/48-h-Ziel
 # V2.9.6 Portability/Robustness
 # - Sensoralter nutzt last_reported mit last_updated-Fallback
 # - Writer-Bookkeeping erst nach erfolgreichem SolarEdge-Write
 # - harter SolarEdge-Trigger aus dem portablen Writer entfernt
 # - Fallback-Resolver akzeptieren 0 W als gültigen ersten Wert
-# V3.0-rc3 portable entity mappings
-# V3.0-rc4 integration portability
-# V3.0-rc3d remaining candidate lists mapped
-# V3.0-rc3c remove mapping initial values
+# v2.9.8 portable Entity-Mappings
+# v2.9.8 portable Integrationsanbindung
+# v2.9.8 gemappte Fallback-Listen ohne lokale Initialwerte
 # =====================================================================
 # SolarEdge Netzdienlich - Unified Package
-# Generated: 2026-07-03 10:45:05
-# Source: solaredge_netzdienlich.yaml + active V2.9.3 sidecars
+# Konsolidierter Hauptstand; dynamische Historie und Resilienzziel liegen in
+# den mitgelieferten v2.9.8-Sidecars.
 # =====================================================================
 
 ###############################################################################
@@ -158,54 +161,63 @@ input_text:
     max: 255
   # <<< merged from solaredge_netzdienlich_v293a_adaptive_forecast_bias.yaml
 
-  # V3.0-rc3 portable entity mappings
+  # v2.9.8 portable Entity-Mappings
   se_nf_evcc_battery_mode_entity:
     name: "SE NF Entity: EVCC Battery Mode"
     icon: mdi:link-variant
     max: 255
 
-  # V3.0-rc3 portable entity mappings
+  # v2.9.8 portable Entity-Mappings
   se_nf_daily_consumption_entity:
     name: "SE NF Entity: Tagesverbrauch"
     icon: mdi:link-variant
     max: 255
 
-  # V3.0-rc3 portable entity mappings
+  # v2.9.8 portable Entity-Mappings
   se_nf_live_pv_power_entities:
     name: "SE NF Entities: Live PV Leistung"
     icon: mdi:link-variant
     max: 255
 
-  # V3.0-rc3 portable entity mappings
+  # v2.9.8 portable Entity-Mappings
   se_nf_actual_pv_today_entities:
     name: "SE NF Entities: PV Ist heute"
     icon: mdi:link-variant
     max: 255
 
-  # V3.0-rc3 portable entity mappings
+  # v2.9.8 portable Entity-Mappings
   se_nf_forecast_now_entity:
     name: "SE NF Entity: PV Prognose Leistung jetzt"
     icon: mdi:link-variant
     max: 255
 
-  # V3.0-rc3 portable entity mappings
+  # v2.9.8 portable Entity-Mappings
   se_nf_pv_overmorrow_entities:
     name: "SE NF Entities: PV Prognose übermorgen"
     icon: mdi:link-variant
     max: 255
 
-  # V3.0-rc4: integration portability mapping
+  # v2.9.8 portable Integrationsanbindung
   se_nf_pv_actual_meter_source_entity:
     name: "SE NF Entity: PV Energy Source for Utility Meter"
     icon: mdi:solar-power-variant
     max: 255
 
-  # V3.0-rc4: integration portability mapping
+  # v2.9.8 portable Integrationsanbindung
   se_nf_sql_db_path:
     name: "SE NF SQL: Recorder DB Path"
     icon: mdi:database-cog
     max: 255
 input_number:
+  se_nf_backup_reserve_fallback_pct:
+    name: "Netzdienlich: Backup-Reserve ohne Backup-System"
+    icon: mdi:battery-lock-open
+    min: 0
+    max: 100
+    step: 1
+    mode: slider
+    unit_of_measurement: "%"
+
   se_nf_closed_charge_limit_w:
     name: "Netzdienlich V2.8: Charge-Limit geschlossen"
     icon: mdi:battery-off-outline
@@ -1289,7 +1301,7 @@ template:
         state: "{{ states('input_text.se_nf_charge_limit_entity') | trim }}"
         attributes:
           configured_entity: "{{ states('input_text.se_nf_charge_limit_entity') | trim }}"
-          note: "V3.0-rc3: Writer-Ziel wird über input_text.se_nf_charge_limit_entity konfiguriert."
+          note: "v2.9.8: Writer-Ziel wird über input_text.se_nf_charge_limit_entity konfiguriert."
       - name: "SE NF Charge Limit Actual"
         unique_id: se_nf_charge_limit_actual
         unit_of_measurement: "W"
@@ -1323,12 +1335,61 @@ template:
         unit_of_measurement: "%"
         icon: mdi:battery-lock
         state: >-
-          {% set e = states('input_text.se_nf_backup_reserve_entity') | trim %}
-          {% if e and states(e) not in ['unknown','unavailable','none',''] %}
-            {{ [[states(e) | float(0), 0] | max, 100] | min | round(1) }}
+          {% set e =
+            states('input_text.se_nf_backup_reserve_entity') | trim
+          %}
+          {% set bad =
+            ['unknown','unavailable','none','None','']
+          %}
+          {% set fallback =
+            states(
+              'input_number.se_nf_backup_reserve_fallback_pct'
+            ) | float(0)
+          %}
+          {% if e not in bad and states(e) not in bad %}
+            {{
+              [[states(e) | float(0), 0] | max, 100]
+              | min
+              | round(1)
+            }}
           {% else %}
-            0
+            {{
+              [[fallback, 0] | max, 100]
+              | min
+              | round(1)
+            }}
           {% endif %}
+        attributes:
+          source: >-
+            {% set e =
+              states('input_text.se_nf_backup_reserve_entity') | trim
+            %}
+            {% set bad =
+              ['unknown','unavailable','none','None','']
+            %}
+            {% if e in bad %}
+              no_backup_or_manual_fallback
+            {% elif states(e) in bad %}
+              configured_entity_unavailable_fallback
+            {% else %}
+              mapped_entity
+            {% endif %}
+          mapped_entity: >-
+            {{
+              states('input_text.se_nf_backup_reserve_entity')
+              | trim
+            }}
+          mapped_state: >-
+            {% set e =
+              states('input_text.se_nf_backup_reserve_entity') | trim
+            %}
+            {{ states(e) if e else 'not_configured' }}
+          fallback_pct: >-
+            {{
+              states(
+                'input_number.se_nf_backup_reserve_fallback_pct'
+              )
+            }}
 
       - name: "SE NF Battery Capacity kWh"
         unique_id: se_nf_battery_capacity_kwh
@@ -1402,13 +1463,64 @@ template:
         device_class: energy
         icon: mdi:weather-night
         state: >-
-          {% set sql = states('sensor.se_nf_remaining_consumption_effective') %}
-          {% set fallback = states('input_number.se_nf_lifetime_night_fallback_kwh') | float(4.5) %}
-          {% if sql not in ['unknown','unavailable','none',''] and (sql | float(0)) > 0 %}
-            {{ [sql | float(0), fallback] | max | round(2) }}
+          {% set dynamic =
+            states('sensor.se_nf_night_consumption_7d_dynamic')
+          %}
+          {% set valid =
+            state_attr(
+              'sensor.se_nf_night_consumption_7d_dynamic',
+              'valid'
+            ) | default(false, true)
+          %}
+          {% set fallback =
+            states(
+              'input_number.se_nf_lifetime_night_fallback_kwh'
+            ) | float(4.5)
+          %}
+          {% if valid
+                and dynamic not in ['unknown','unavailable','none','']
+                and dynamic | float(0) > 0 %}
+            {{ dynamic | float(0) | round(2) }}
           {% else %}
             {{ fallback | round(2) }}
           {% endif %}
+        attributes:
+          source: >-
+            {% set valid =
+              state_attr(
+                'sensor.se_nf_night_consumption_7d_dynamic',
+                'valid'
+              ) | default(false, true)
+            %}
+            {{ 'dynamic_median_7_nights' if valid else 'manual_fallback' }}
+          dynamic_valid: >-
+            {{
+              state_attr(
+                'sensor.se_nf_night_consumption_7d_dynamic',
+                'valid'
+              ) | default(false, true)
+            }}
+          valid_nights: >-
+            {{
+              state_attr(
+                'sensor.se_nf_night_consumption_7d_dynamic',
+                'valid_nights'
+              )
+            }}
+          window_start: >-
+            {{
+              state_attr(
+                'sensor.se_nf_night_consumption_7d_dynamic',
+                'window_start'
+              )
+            }}
+          window_end: >-
+            {{
+              state_attr(
+                'sensor.se_nf_night_consumption_7d_dynamic',
+                'window_end'
+              )
+            }}
 
       - name: "SE NF Effective Target SoC Pct"
         unique_id: se_nf_effective_target_soc_pct
@@ -1416,23 +1528,34 @@ template:
         icon: mdi:battery-sync
         state: >-
           {% set mode = states('sensor.se_nf_optimization_mode_effective') %}
-          {% set cap = states('sensor.se_nf_battery_capacity_kwh') | float(0) %}
-          {% set reserve = states('sensor.se_nf_backup_reserve_pct') | float(0) %}
-          {% if mode == 'Akku schonen' and cap > 0 %}
-            {% set night = states('sensor.se_nf_lifetime_night_energy_forecast') | float(states('input_number.se_nf_lifetime_night_fallback_kwh') | float(4.5)) %}
-            {% set safety = states('input_number.se_nf_lifetime_safety_kwh') | float(1.0) %}
-            {% set min_soc = states('input_number.se_nf_lifetime_min_soc_pct') | float(45) %}
-            {% set max_soc = states('input_number.se_nf_lifetime_max_soc_pct') | float(85) %}
-            {% set raw = reserve + ((night + safety) / cap * 100) %}
-            {{ [[raw, min_soc] | max, max_soc] | min | round(1) }}
+          {% set candidate = states('sensor.se_nf_resilience_target_pct') %}
+          {% set bad = ['unknown','unavailable','none','None',''] %}
+          {% if mode == 'Akku schonen' %}
+            {% if candidate not in bad and (candidate | float(0)) > 0 %}
+              {{ candidate | float(0) | round(1) }}
+            {% else %}
+              {% set cap = states('sensor.se_nf_battery_capacity_kwh') | float(0) %}
+              {% set reserve = states('sensor.se_nf_backup_reserve_pct') | float(0) %}
+              {% set night = states('sensor.se_nf_lifetime_night_energy_forecast') | float(states('input_number.se_nf_lifetime_night_fallback_kwh') | float(4.5)) %}
+              {% set factor = 1 + (states('input_number.se_nf_lifetime_soc_buffer_pct') | float(0)) / 100 %}
+              {% set safety = states('input_number.se_nf_lifetime_safety_kwh') | float(1.0) %}
+              {% set minimum = states('input_number.se_nf_lifetime_min_soc_pct') | float(45) %}
+              {% set maximum = states('input_number.se_nf_lifetime_max_soc_pct') | float(85) %}
+              {% set raw = reserve + ((night * factor + safety) / cap * 100) if cap > 0 else maximum %}
+              {{ [[raw, minimum] | max, maximum] | min | round(1) }}
+            {% endif %}
           {% else %}
             {{ states('input_number.se_nf_target_soc_pct') | float(0) | round(1) }}
           {% endif %}
         attributes:
           mode: "{{ states('sensor.se_nf_optimization_mode_effective') }}"
-          night_kwh: "{{ states('sensor.se_nf_lifetime_night_energy_forecast') }}"
-          note: "V2.9 : Lebensdauer-Modus berechnet Ziel-SoC aus Nachtbedarf + Reserve und deckelt bei Max-SoC."
-
+          source: >-
+            {% set candidate = states('sensor.se_nf_resilience_target_pct') %}
+            {{ 'resilience_cumulative_24_48h' if candidate not in ['unknown','unavailable','none','None',''] and (candidate | float(0)) > 0 else 'buffered_night_failsafe' }}
+          resilience_target_pct: "{{ states('sensor.se_nf_resilience_target_pct') }}"
+          required_energy_kwh: "{{ states('sensor.se_nf_resilience_required_energy') }}"
+          planning_horizon: "{{ state_attr('sensor.se_nf_resilience_required_energy', 'planning_horizon') }}"
+          note: "Akku-schonen: dynamische Reserve plus gepufferter Nacht-/Tagesbedarf minus PV-Prognose; begrenzt auf Min-/Max-SoC."
       - name: "SE NF Needed Energy"
         unique_id: se_nf_needed_energy
         unit_of_measurement: "kWh"
@@ -1442,7 +1565,7 @@ template:
           {% set cap = states('sensor.se_nf_battery_capacity_kwh') | float(0) %}
           {% set soe = states('sensor.se_nf_battery_soe') | float(0) %}
           {% set reserve = states('sensor.se_nf_backup_reserve_pct') | float(0) %}
-          {% set target = states('sensor.speicher_ziel_ladestand') | float(states('input_number.se_nf_target_soc_pct') | float(0)) %}
+          {% set target = states('sensor.se_nf_effective_target_soc_pct') | float(states('input_number.se_nf_target_soc_pct') | float(0)) %}
           {% set effective_soe = [soe, reserve] | max %}
           {% if cap <= 0 %}
             0
@@ -2334,6 +2457,9 @@ template:
           {% set cfg = states('sensor.se_nf_config_check') %}
           {% set soe = states('sensor.se_nf_battery_soe') | float(-1) %}
           {% set cap = states('sensor.se_nf_battery_capacity_kwh') | float(0) %}
+          {% set reserve = states('sensor.se_nf_backup_reserve_pct') | float(0) %}
+          {% set lifetime_min = states('input_number.se_nf_lifetime_min_soc_pct') | float(45) %}
+          {% set lifetime_max = states('input_number.se_nf_lifetime_max_soc_pct') | float(85) %}
           {% set limit = states('sensor.se_nf_charge_limit_actual') | float(-1) %}
           {% if cfg != 'ok' %}
             config_{{ cfg }}
@@ -2341,6 +2467,10 @@ template:
             soe_out_of_range
           {% elif cap <= 0 %}
             battery_capacity_invalid
+          {% elif lifetime_min > lifetime_max %}
+            lifetime_target_bounds_invalid
+          {% elif reserve > lifetime_max %}
+            lifetime_max_below_backup_reserve
           {% elif limit < 0 or limit > 5000 %}
             charge_limit_out_of_range
           {% else %}
@@ -2648,7 +2778,7 @@ template:
           {% set base_pv = rem * weather %}
           {% set blend = states('sensor.se_nf_adaptive_forecast_live_blend') | float(1) %}
           {% set corrected_pv = base_pv * blend %}
-          {% set load = states('sensor.se_nf_lifetime_night_energy_forecast') | float(states('sensor.se_nf_load_forecast_7d_cached') | float(0)) %}
+          {% set load = states('sensor.se_nf_remaining_consumption_today') | float(states('sensor.se_nf_load_forecast_7d_cached') | float(0)) %}
           {% set need = states('sensor.se_nf_needed_energy') | float(0) %}
           {% set cap = states('sensor.se_nf_battery_capacity_kwh') | float(0) %}
           {% set dpct = states('sensor.se_nf_adaptive_forecast_target_delta_pct') | float(0) %}
@@ -2664,7 +2794,7 @@ template:
           {% set rem = states('sensor.se_nf_remaining_pv_today') | float(0) %}
           {% set weather = states('sensor.se_nf_weather_planning_factor_today') | float(1) %}
           {% set base_pv = rem * weather %}
-          {% set load = states('sensor.se_nf_lifetime_night_energy_forecast') | float(states('sensor.se_nf_load_forecast_7d_cached') | float(0)) %}
+          {% set load = states('sensor.se_nf_remaining_consumption_today') | float(states('sensor.se_nf_load_forecast_7d_cached') | float(0)) %}
           {% set need = states('sensor.se_nf_needed_energy') | float(0) %}
           {% set base_buffer = base_pv - load - need %}
 
@@ -2799,8 +2929,8 @@ template:
           {% else %}
             {% set rem = states('sensor.se_nf_remaining_pv_today') | float(0) %}
             {% set weather = states('sensor.se_nf_weather_planning_factor_today') | float(1) %}
-            {% set night = states('sensor.se_nf_lifetime_night_energy_forecast') | float(states('sensor.se_nf_load_forecast_7d_cached') | float(0)) %}
-            {{ ((rem * weather) - night - need) | round(2) }}
+            {% set daily_load = states('sensor.se_nf_remaining_consumption_today') | float(states('sensor.se_nf_load_forecast_7d_cached') | float(0)) %}
+            {{ ((rem * weather) - daily_load - need) | round(2) }}
           {% endif %}
 
       - name: "SE NF Live Forecast Gap Lead Minutes"
@@ -2901,55 +3031,14 @@ template:
         icon: mdi:battery-check
         unit_of_measurement: "%"
         state: >-
-          {% set mode = states('input_select.se_nf_optimization_mode') %}
-          {% set normal_target = states('input_number.se_nf_target_soc_pct') | float(0) %}
-
-          {% if mode == 'Akku schonen' %}
-            {% set cap_entity = states('input_text.se_nf_battery_capacity_entity') | trim %}
-            {% set cap_auto = states(cap_entity) | float(0) if cap_entity not in ['unknown','unavailable','none',''] else 0 %}
-            {% set cap_manual = states('input_number.se_nf_battery_capacity_kwh_manual') | float(0) %}
-            {% set cap = cap_auto if cap_auto > 0 else cap_manual %}
-
-            {% set reserve_e = states('input_text.se_nf_backup_reserve_entity') | trim %}
-              {% set reserve = states(reserve_e) | float(0) if reserve_e not in ['unknown','unavailable','none','None',''] else 0 %}
-            {% set night = states('sensor.se_nf_lifetime_night_energy_forecast') | float(0) %}
-            {% set safety = states('input_number.se_nf_lifetime_safety_kwh') | float(0) %}
-            {% set extra_buffer = states('input_number.se_nf_lifetime_soc_buffer_pct') | float(0) %}
-            {% set min_soc = states('input_number.se_nf_lifetime_min_target_soc_pct') | float(0) %}
-            {% set max_soc = states('input_number.se_nf_lifetime_max_target_soc_pct') | float(normal_target) %}
-
-            {% if cap > 0 %}
-              {% set raw = reserve + ((night + safety) / cap * 100) + extra_buffer %}
-              {{ [[raw, min_soc] | max, max_soc] | min | round(1) }}
-            {% else %}
-              {{ normal_target | round(1) }}
-            {% endif %}
-          {% else %}
-            {{ normal_target | round(1) }}
-          {% endif %}
+          {{ states('sensor.se_nf_effective_target_soc_pct') | float(states('input_number.se_nf_target_soc_pct') | float(0)) | round(1) }}
         attributes:
-          speicherstrategie: "{{ states('input_select.se_nf_optimization_mode') }}"
-          speichergroesse_quelle: >-
-            {% set cap_entity = states('input_text.se_nf_battery_capacity_entity') | trim %}
-            {% set cap_auto = states(cap_entity) | float(0) if cap_entity not in ['unknown','unavailable','none',''] else 0 %}
-            {% if cap_auto > 0 %}
-              Sensor
-            {% elif states('input_number.se_nf_battery_capacity_kwh_manual') | float(0) > 0 %}
-              manuell
-            {% else %}
-              fehlt
-            {% endif %}
-          speichergroesse_kwh: >-
-            {% set cap_entity = states('input_text.se_nf_battery_capacity_entity') | trim %}
-            {% set cap_auto = states(cap_entity) | float(0) if cap_entity not in ['unknown','unavailable','none',''] else 0 %}
-            {% set cap_manual = states('input_number.se_nf_battery_capacity_kwh_manual') | float(0) %}
-            {{ (cap_auto if cap_auto > 0 else cap_manual) | round(2) }}
-          geplanter_nachtbedarf_kwh: "{{ states('sensor.se_nf_lifetime_night_energy_forecast') }}"
-          zusaetzlicher_puffer_pct: "{{ states('input_number.se_nf_lifetime_soc_buffer_pct') }}"
-          erklaerung: "Bei Akku schonen wird der Ziel-Ladestand aus Nachtbedarf, Reserve und zusätzlichem Puffer berechnet."
+          speicherstrategie: "{{ states('sensor.se_nf_optimization_mode_effective') }}"
+          quelle: "sensor.se_nf_effective_target_soc_pct"
+          hinweis: "Kompatibilitaetsalias; keine zweite Zielberechnung."
   # <<< merged from solaredge_speicher_user_settings.yaml / rc2 target SOC sensor
 
-  # >>> V2.9.7 Issue #4: mappable PV actual meter source
+  # >>> V2.9.8 Issue #4: mappable PV actual meter source
   - sensor:
       - name: "SE NF PV Actual Meter Source Energy"
         unique_id: se_nf_pv_actual_meter_source_energy
@@ -2997,7 +3086,7 @@ template:
             {% else %}
               active
             {% endif %}
-  # <<< V2.9.7 Issue #4: mappable PV actual meter source
+  # <<< V2.9.8 Issue #4: mappable PV actual meter source
 automation:
   - id: se_nf_v288_sql_load_forecast_poll
     alias: "SolarEdge: Netzdienlich V2.8.9a SQL Load Forecast Poll"
@@ -3183,7 +3272,8 @@ automation:
               low_soc
             {% elif mode == 'Eigenverbrauch maximieren' %}
               open
-            {% elif mode == 'Akku schonen' and lifetime_reached %}
+            {% elif mode == 'Akku schonen'
+                  and (lifetime_reached or need | float(0) <= 0.05) %}
               done
             {% elif active_session_now and end_grace_ts | int(0) > 0 and now_ts | int(0) <= end_grace_ts | int(0) %}
               {% if need | float(0) <= 0.05 %}
@@ -3261,7 +3351,10 @@ automation:
         state: "Akku schonen"
       - condition: template
         value_template: >-
-          {{ states('input_select.se_nf_session_state') in ['open','battery_full_open'] }}
+          {{
+            states('input_select.se_nf_session_state')
+            not in ['evcc_override','low_soc','risk']
+          }}
       - condition: template
         value_template: >-
           {{ states('sensor.se_nf_battery_soe') | float(0)
@@ -3537,8 +3630,8 @@ automation:
       - condition: template
         alias: "V2.9.3h Guard: Critical Deficit nur bei echtem Defizit"
         value_template: >-
-          {% set soe = states('sensor.solaredge_i1_b1_state_of_energy') | float(0) %}
-          {% set reserve = states('number.solaredge_i1_backup_reserve') | float(0) %}
+          {% set soe = states('sensor.se_nf_battery_soe') | float(0) %}
+          {% set reserve = states('sensor.se_nf_backup_reserve_pct') | float(0) %}
           {% set need = states('sensor.se_nf_needed_energy') | float(0) %}
           {% set pv_for_akku = states('sensor.se_nf_available_pv_for_battery_today') | float(99) %}
           {# V2.9.5: Legacy-Effective-Sensoren entfernt; aktuelle PV-Pufferlogik ist Quelle #}

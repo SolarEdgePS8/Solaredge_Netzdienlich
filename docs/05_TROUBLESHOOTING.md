@@ -79,3 +79,24 @@ input_select.se_nf_session_state
 ```
 
 Bei einer bereits geöffneten Session darf der historische Start stabil bleiben. Außerhalb einer aktiven Session müssen der neue Kandidat und der aktive Plan jedoch zusammenpassen. Ein Fenster mit `Start >= Ende` ist immer ungültig und wird ab v2.9.7 nicht mehr als normales Ladefenster ausgegeben.
+
+## `se_nf_load_forecast_7d_cached.py` fehlt
+
+Seit v2.9.8 liefert `scripts/install_package.sh` alle drei benötigten
+Recorder-Helfer automatisch nach `/config` aus. Nach einem Update prüfen:
+
+```bash
+ls -l /config/se_nf_load_forecast_7d_cached.py \
+      /config/se_nf_night_forecast_7d.py \
+      /config/se_nf_daytime_forecast_7d.py
+```
+
+Fehlt eine Datei, den Installer aus dem aktuellen Repository erneut ausführen
+und danach `ha core check` starten.
+
+## Anlage ohne Backup-System
+
+`input_text.se_nf_backup_reserve_entity` darf leer sein. Der kanonische Sensor
+`sensor.se_nf_backup_reserve_pct` verwendet dann den Wert aus
+`input_number.se_nf_backup_reserve_fallback_pct`. Bei einer Anlage ohne
+reservierte Backup-Kapazität ist `0 %` der passende Ausgangswert.

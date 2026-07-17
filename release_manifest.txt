@@ -1,4 +1,10 @@
 package/solaredge_netzdienlich.yaml
 package/se_nf_07_writer_safety.yaml
 package/se_nf_08_planning_helpers.yaml
-package/se_nf_09_lifetime_target_helpers.yaml
+package/se_nf_10_dynamic_night_forecast.yaml
+package/se_nf_13_resilience_target.yaml
+scripts/runtime/se_nf_load_forecast_7d_cached.py
+scripts/runtime/se_nf_night_forecast_7d.py
+scripts/runtime/se_nf_daytime_forecast_7d.py
+validation/se_nf_full_mode_acceptance_test.py
+validation/se_nf_resilience_acceptance_test.py
